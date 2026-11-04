@@ -1,0 +1,271 @@
+import { ConfluenceError, type ConfluenceCredentials } from '../core/confluence-client.ts';
+import type { MessageBatch } from '../core/mesh.ts';
+import { clearToken, isComplete, loadCredentials, saveCredentials, Session } from '../core/session.ts';
+import type { ChatRoom } from './chat-room.ts';
+import './chat-room.ts';
+import type { LoginView } from './login-view.ts';
+import './login-view.ts';
+import type { PeerList } from './peer-list.ts';
+import './peer-list.ts';
+
+const template = document.createElement('template');
+template.innerHTML = `
+  <style>
+    :host {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100%;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: var(--header-h);
+      padding: 0 0.5rem 0 1rem;
+      background: var(--accent);
+      color: var(--accent-text);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.125rem;
+    }
+    .status {
+      flex: 1;
+      font-size: 0.8125rem;
+      opacity: 0.9;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    header button {
+      font: inherit;
+      font-size: 0.875rem;
+      min-height: 2.5rem;
+      padding: 0 0.75rem;
+      border: 1px solid rgb(255 255 255 / 0.4);
+      border-radius: var(--radius);
+      background: transparent;
+      color: inherit;
+    }
+    main {
+      position: relative;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr);
+      min-height: 0;
+      overflow: hidden;
+    }
+    aside {
+      position: absolute;
+      inset: 0 0 0 auto;
+      width: min(85vw, 20rem);
+      border-left: 1px solid var(--border);
+      box-shadow: -8px 0 24px rgb(0 0 0 / 0.2);
+    }
+    [hidden] {
+      display: none !important;
+    }
+    @media (min-width: 900px) {
+      :host {
+        max-width: 1200px;
+        margin: 0 auto;
+        border-inline: 1px solid var(--border);
+      }
+      :host(.in-session) main {
+        grid-template-columns: 1fr 20rem;
+      }
+      :host(.in-session) aside {
+        display: block !important;
+        position: static;
+        width: auto;
+        box-shadow: none;
+      }
+      :host(.in-session) .peers {
+        display: none !important;
+      }
+    }
+  </style>
+  <header>
+    <h1>Statim</h1>
+    <span class="status" role="status"></span>
+    <button class="peers" type="button" hidden aria-expanded="false">Equipo</button>
+    <button class="logout" type="button" hidden>Salir</button>
+  </header>
+  <main>
+    <login-view hidden></login-view>
+    <chat-room hidden></chat-room>
+    <aside hidden><peer-list></peer-list></aside>
+  </main>
+`;
+
+function describeError(e: unknown): string {
+  if (e instanceof ConfluenceError) {
+    if (e.status === 401 || e.status === 403) return 'Credenciales o permisos no válidos en Confluence.';
+    if (e.status === 404) return 'No se encuentra la página de Confluence.';
+    if (e.status === 429) return 'Confluence está limitando las peticiones.';
+    return e.message;
+  }
+  if (e instanceof TypeError) return 'No se pudo contactar con Confluence (revisa red, CORS o proxy).';
+  return 'Error inesperado.';
+}
+
+export class StatimApp extends HTMLElement {
+  #status: HTMLElement;
+  #peersButton: HTMLButtonElement;
+  #logoutButton: HTMLButtonElement;
+  #login: LoginView;
+  #chat: ChatRoom;
+  #aside: HTMLElement;
+  #peerList: PeerList;
+  #session?: Session;
+  #connected = 0;
+  #lastError = '';
+
+  constructor() {
+    super();
+    const root = this.attachShadow({ mode: 'open' });
+    root.append(template.content.cloneNode(true));
+    this.#status = root.querySelector('.status')!;
+    this.#peersButton = root.querySelector('.peers')!;
+    this.#logoutButton = root.querySelector('.logout')!;
+    this.#login = root.querySelector('login-view')!;
+    this.#chat = root.querySelector('chat-room')!;
+    this.#aside = root.querySelector('aside')!;
+    this.#peerList = root.querySelector('peer-list')!;
+
+    this.#login.addEventListener('login', (e) => void this.#onLogin((e as CustomEvent<ConfluenceCredentials>).detail));
+    this.#logoutButton.addEventListener('click', () => void this.#logout(''));
+    this.#peersButton.addEventListener('click', () => this.#togglePeers());
+    this.#peerList.addEventListener('count', (e) => {
+      this.#connected = (e as CustomEvent<number>).detail;
+      this.#renderStatus();
+    });
+  }
+
+  async connectedCallback() {
+    window.addEventListener('online', this.#renderStatus);
+    window.addEventListener('offline', this.#renderStatus);
+    this.#renderStatus();
+
+    const credentials = await loadCredentials();
+    if (!isComplete(credentials)) {
+      this.#showLogin(credentials, '');
+      return;
+    }
+    try {
+      await this.#startSession(credentials);
+    } catch (e) {
+      this.#showLogin(credentials, describeError(e));
+    }
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener('online', this.#renderStatus);
+    window.removeEventListener('offline', this.#renderStatus);
+    this.#session?.stop();
+  }
+
+  async #onLogin(credentials: ConfluenceCredentials): Promise<void> {
+    this.#login.busy = true;
+    this.#login.error = '';
+    if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission();
+    try {
+      await this.#startSession(credentials);
+      await saveCredentials(credentials);
+    } catch (e) {
+      this.#login.error = describeError(e);
+    } finally {
+      this.#login.busy = false;
+    }
+  }
+
+  async #startSession(credentials: ConfluenceCredentials): Promise<void> {
+    const session = new Session(credentials);
+    session.registry.addEventListener('error', this.#onRegistryError);
+    session.registry.addEventListener('signal', this.#clearError);
+    session.registry.addEventListener('peer', this.#clearError);
+    session.mesh.addEventListener('messages', this.#onMessages);
+    await session.start();
+
+    this.#session = session;
+    this.#lastError = '';
+    this.classList.add('in-session');
+    this.#login.hidden = true;
+    this.#chat.hidden = false;
+    this.#peersButton.hidden = false;
+    this.#logoutButton.hidden = false;
+    await this.#chat.attach(session);
+    this.#peerList.attach(session);
+    this.#renderStatus();
+  }
+
+  async #logout(error: string): Promise<void> {
+    const session = this.#session;
+    this.#session = undefined;
+    session?.stop();
+    this.#chat.detach();
+    this.#peerList.detach();
+    await clearToken();
+    this.#showLogin(await loadCredentials(), error);
+  }
+
+  #showLogin(credentials: Partial<ConfluenceCredentials>, error: string): void {
+    this.classList.remove('in-session');
+    this.#chat.hidden = true;
+    this.#aside.hidden = true;
+    this.#peersButton.hidden = true;
+    this.#logoutButton.hidden = true;
+    this.#login.values = credentials;
+    this.#login.error = error;
+    this.#login.hidden = false;
+    this.#connected = 0;
+    this.#renderStatus();
+  }
+
+  #togglePeers(): void {
+    this.#aside.hidden = !this.#aside.hidden;
+    this.#peersButton.setAttribute('aria-expanded', String(!this.#aside.hidden));
+  }
+
+  #onRegistryError = (e: Event) => {
+    const error = (e as CustomEvent<unknown>).detail;
+    if (error instanceof ConfluenceError && (error.status === 401 || error.status === 403)) {
+      void this.#logout(describeError(error));
+      return;
+    }
+    this.#lastError = describeError(error);
+    this.#renderStatus();
+  };
+
+  #clearError = () => {
+    if (!this.#lastError) return;
+    this.#lastError = '';
+    this.#renderStatus();
+  };
+
+  #onMessages = (e: Event) => {
+    void this.#notify((e as CustomEvent<MessageBatch>).detail);
+  };
+
+  async #notify({ from, messages, current }: MessageBatch): Promise<void> {
+    if (!document.hidden || !('Notification' in window) || Notification.permission !== 'granted') return;
+    const title = from.split('@')[0];
+    // One notification per frame: the live message, or a summary when only history was recovered.
+    const body = current ? current.text.slice(0, 140) : `${messages.length} mensaje(s) recuperado(s)`;
+    const options: NotificationOptions = { body, tag: 'statim', icon: '/icons/icon.svg' };
+    const registration = await navigator.serviceWorker?.getRegistration();
+    if (registration) await registration.showNotification(title, options);
+    else new Notification(title, options);
+  }
+
+  #renderStatus = () => {
+    let text = '';
+    if (!navigator.onLine) text = 'Sin conexión';
+    else if (this.#lastError) text = this.#lastError;
+    else if (this.#session) text = this.#connected === 1 ? '1 conectado' : `${this.#connected} conectados`;
+    this.#status.textContent = text;
+    this.#peersButton.textContent = `Equipo (${this.#connected})`;
+  };
+}
+
+customElements.define('statim-app', StatimApp);
