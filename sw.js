@@ -1,11 +1,11 @@
-const CACHE = 'statim-v1793877145027';
+const CACHE = 'statim-v1793877982830';
 const SHELL = [
-  "/",
-  "/index.html",
-  "/manifest.webmanifest",
-  "/icons/icon.svg",
-  "/assets/index-B_SkRrlv.js",
-  "/assets/index-CJijM0ON.css"
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./icons/icon.svg",
+  "./assets/index-CJijM0ON.css",
+  "./assets/index-C_QIQ5Qv.js"
 ];
 
 self.addEventListener('install', (event) => {
@@ -36,7 +36,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(() => caches.match('/index.html')));
+    event.respondWith(fetch(request).catch(() => caches.match(new URL('./index.html', self.location).href)));
     return;
   }
 
@@ -59,7 +59,7 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       const client = list.find((c) => 'focus' in c);
-      return client ? client.focus() : self.clients.openWindow('/');
+      return client ? client.focus() : self.clients.openWindow(self.registration.scope);
     }),
   );
 });
