@@ -1,10 +1,10 @@
-const CACHE = 'statim-v1793890006899';
+const CACHE = 'statim-v1793897682525';
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icons/icon.svg",
-  "./assets/index-BhjlI9AC.js",
+  "./assets/index-BqWiBM_N.js",
   "./assets/index-CJijM0ON.css"
 ];
 
