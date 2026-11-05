@@ -1,0 +1,65 @@
+const CACHE = 'statim-v1793877145027';
+const SHELL = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/icons/icon.svg",
+  "/assets/index-B_SkRrlv.js",
+  "/assets/index-CJijM0ON.css"
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING' || (event.data && event.data.type === 'SKIP_WAITING')) {
+    self.skipWaiting();
+  }
+});
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+  // Never cache Confluence API traffic.
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/wiki')) {
+    return;
+  }
+
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request).catch(() => caches.match('/index.html')));
+    return;
+  }
+
+  event.respondWith(
+    caches.open(CACHE).then(async (cache) => {
+      const cached = await cache.match(request);
+      const network = fetch(request)
+        .then((res) => {
+          if (res.ok) cache.put(request, res.clone());
+          return res;
+        })
+        .catch(() => cached);
+      return cached ?? network;
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const client = list.find((c) => 'focus' in c);
+      return client ? client.focus() : self.clients.openWindow('/');
+    }),
+  );
+});
