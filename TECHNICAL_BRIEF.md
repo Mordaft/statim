@@ -43,7 +43,7 @@ flowchart LR
   CA -- "HTTPS (stz1: base64 LZ4 JSON)" --> P[localproxy / proxy CORS]
   P --> C[(Confluence<br/>footer-comments v2)]
   MA <-- "WebRTC DataChannel<br/>DTLS + AES-GCM(LZ4)" --> MB[Mesh B]
-  MA -. STUN/TURN .- T[STUN público / coturn]
+  MA -. TURNS (TLS 443) .- T[Metered subdomain.metered.live / coturn]
 ```
 
 **Confluence** es solo el *rendezvous*. Por él pasan anuncios (quién está y con qué semilla) y señalización WebRTC (oferta/respuesta SDP). **Los mensajes del chat nunca pasan por Confluence.** Hay una prueba e2e que lo verifica.
@@ -369,7 +369,7 @@ Web Components con Shadow DOM, sin framework. Los estilos usan las variables CSS
 | Componente | API |
 |---|---|
 | `<statim-app>` | Orquesta login ↔ sala. Muestra el estado en la cabecera. Un 401/403 → vuelve al login. Si `document.hidden`, muestra **una** notificación por lote: el mensaje actual o "N mensaje(s) recuperado(s)". |
-| `<login-view>` | Setters `values`, `error`, `busy`. Evento `login` (`CustomEvent<ConfluenceCredentials>`). |
+| `<login-view>` | Setters `values`, `error`, `busy`. Evento `login` (`CustomEvent<LoginDetails>`). Sección de configuración TURN/TLS que nunca almacena la clave en disco. |
 | `<chat-room>` | `attach(session)` / `detach()`. Muestra los últimos 200 mensajes. Enter envía, Shift+Enter hace salto de línea. Repintado sin saltos (ver abajo). |
 | `<peer-list>` | `attach(session)` / `detach()`. Evento `count` con el número de conectados. |
 | `<peer-avatar email="…" online>` | Identicon cacheado. |
@@ -405,7 +405,7 @@ Web Components con Shadow DOM, sin framework. Los estilos usan las variables CSS
 | **Semilla simétrica publicada en Confluence.** Quien tenga acceso a la página y pueda capturar el tráfico podría descifrar la capa de aplicación. | Aceptado por el propietario. DTLS de WebRTC sigue protegiendo el tránsito. Alternativa preparada para el futuro: ECDH P-256 + claves públicas (sustituir `crypto.ts` y el anuncio). |
 | **Suplantación:** cualquiera con acceso a la página puede publicar un `announce` con otro email. | Pendiente. Mitigación posible: comprobar `version.authorId` del comentario frente al `accountId` del email. |
 | Token API sin cifrar en IndexedDB | Aceptado en v1. "Salir" lo borra. |
-| Credenciales TURN dentro del bundle (`VITE_TURN_*`) | Inherente a una SPA. Usar credenciales TURN temporales si se despliega. |
+| Credenciales TURN / Metered | No se almacenan en la app, ni en disco ni en IndexedDB. Se informan opcionalmente en una sección dedicada de la pantalla de acceso y solo se usan en memoria para resolver los servidores TURNS (TLS 443) durante la sesión activa. |
 | Contenido malicioso en comentarios o frames | Validación estricta por campo, límites de tamaño, LZ4 con límite, AES-GCM autenticado, `textContent` en la UI. |
 | Proxy abierto | `localproxy` solo escucha en `localhost`, solo reenvía `/wiki/` al destino fijo, exige `https` (o `http` a localhost), aplica CORS por lista de orígenes y **no imprime el token**. |
 
@@ -420,6 +420,7 @@ Copiar [.env.example](.env.example) a `.env`.
 | `CONFLUENCE_BASE_URL` | Solo `vite dev`: destino del proxy `/wiki`. Quita `Origin`/`Referer` para evitar el XSRF 403 de Atlassian. |
 | `VITE_CONFLUENCE_BASE_URL` | Valor por defecto del campo URL del login. Vacío = mismo origen. |
 | `VITE_CONFLUENCE_PAGE_ID` | Valor por defecto del ID de página. |
+| `VITE_METERED_DOMAIN`, `VITE_METERED_API_KEY` | Subdominio y clave de Metered opcionales (solo tests/dev). En producción se introducen en la pantalla de acceso y nunca se guardan. |
 | `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL` | Servidor TURN opcional (coturn). |
 | `VITE_STUN_URLS` | Lista separada por comas. Vacío = sin STUN (lo usan los e2e). Por defecto, los STUN de Google. |
 | `VITE_TIME_SCALE` | **Solo pruebas.** Multiplica los tiempos del protocolo (0.1 → 10 s pasan a 1 s). |
@@ -490,7 +491,8 @@ Escenarios de [chat.spec.ts](test-e2e/chat.spec.ts), en serie con 3 contextos in
 6. Bob cierra la app, Ana escribe y, al volver, Bob recibe lo que se perdió (historial de 10 h).
 7. Dan llega tarde: recibe los mensajes de Ana y Bob en orden, y no los de Cid, que ya no está.
 8. Bob lee mensajes antiguos y llega uno nuevo: no se mueve, aparece "1 mensaje nuevo ↓" y al pulsarlo baja al final. También comprueba que el cuadro de texto sigue en pantalla con la conversación llena.
-8. La pantalla de login es mobile-first (sin scroll horizontal, botones ≥ 44 px).
+9. La pantalla de login es mobile-first (sin scroll horizontal, botones ≥ 44 px).
+10. Inicio de sesión con API Key de Metered usando TURNS sobre TLS (puerto 443), verificando que la clave nunca se almacena en localStorage, sessionStorage ni IndexedDB, y que el formulario se limpia al salir.
 
 ### Informes (`reports/`, ignorado por git)
 

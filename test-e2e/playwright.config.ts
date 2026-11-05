@@ -1,5 +1,15 @@
+import { execSync } from 'node:child_process';
 import { defineConfig, devices } from '@playwright/test';
 import { APP_PORT, APP_URL, FAKE_PORT, FAKE_URL, PROXY_PORT, TIME_SCALE } from './env.ts';
+
+const psCmd = (() => {
+  try {
+    execSync('pwsh --version', { stdio: 'ignore' });
+    return 'pwsh -NoProfile';
+  } catch {
+    return 'powershell -NoProfile -ExecutionPolicy Bypass';
+  }
+})();
 
 // Chain under test: browser -> vite (app) -> localproxy (CORS) -> fake-atlassian (in-memory Confluence).
 export default defineConfig({
@@ -33,14 +43,14 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `pwsh -NoProfile -File fake-atlassian/fake-atlassian.ps1 -Port ${FAKE_PORT}`,
+      command: `${psCmd} -File fake-atlassian/fake-atlassian.ps1 -Port ${FAKE_PORT}`,
       cwd: '..',
       url: `${FAKE_URL}/__admin/comments`,
       reuseExistingServer: false,
       timeout: 30_000,
     },
     {
-      command: `pwsh -NoProfile -File localproxy/localproxy.ps1 ${FAKE_URL} -Port ${PROXY_PORT} -AllowedOrigin ${APP_URL} -PreviewLength 0`,
+      command: `${psCmd} -File localproxy/localproxy.ps1 ${FAKE_URL} -Port ${PROXY_PORT} -AllowedOrigin ${APP_URL} -PreviewLength 0`,
       cwd: '..',
       port: PROXY_PORT,
       reuseExistingServer: false,

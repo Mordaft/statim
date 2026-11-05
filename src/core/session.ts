@@ -32,9 +32,9 @@ export class Session {
   readonly registry: Registry;
   readonly mesh: Mesh;
 
-  constructor(credentials: ConfluenceCredentials) {
-    this.registry = new Registry(new ConfluenceClient(credentials), credentials.email);
-    this.mesh = new Mesh(this.registry);
+  constructor(credentials: ConfluenceCredentials, iceServers?: RTCIceServer[]) {
+    this.registry = new Registry(new ConfluenceClient(credentials), credentials.email, iceServers);
+    this.mesh = new Mesh(this.registry, iceServers);
   }
 
   async start(): Promise<void> {

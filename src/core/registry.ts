@@ -28,6 +28,7 @@ export class Registry extends EventTarget {
   readonly session = crypto.randomUUID();
   readonly email: string;
   readonly #client: ConfluenceClient;
+  readonly #iceServers: RTCIceServer[];
   #ip = '';
   #since = 0;
   #running = false;
@@ -39,10 +40,11 @@ export class Registry extends EventTarget {
   #fastHolds = 0;
   readonly #outbox: OutboxEntry[] = [];
 
-  constructor(client: ConfluenceClient, email: string) {
+  constructor(client: ConfluenceClient, email: string, iceServers?: RTCIceServer[]) {
     super();
     this.#client = client;
     this.email = email.trim().toLowerCase();
+    this.#iceServers = iceServers ?? config.iceServers;
   }
 
   async start(): Promise<void> {
@@ -50,7 +52,7 @@ export class Registry extends EventTarget {
     this.#running = true;
     this.#since = Date.now() - config.announceTtlMs;
     this.#fastUntil = Date.now() + config.startupFastPollMs;
-    this.#ip = await detectPublicIp(config.iceServers);
+    this.#ip = await detectPublicIp(this.#iceServers);
     await this.#rotateIfDue(true);
     this.#rotateTimer = setInterval(() => {
       this.#rotateIfDue(false).catch((e) => this.#emitError(e));

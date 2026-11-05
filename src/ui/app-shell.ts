@@ -1,9 +1,10 @@
 import { ConfluenceError, type ConfluenceCredentials } from '../core/confluence-client.ts';
 import type { MessageBatch } from '../core/mesh.ts';
+import { fetchMeteredIceServers } from '../core/metered.ts';
 import { clearToken, isComplete, loadCredentials, saveCredentials, Session } from '../core/session.ts';
 import type { ChatRoom } from './chat-room.ts';
 import './chat-room.ts';
-import type { LoginView } from './login-view.ts';
+import type { LoginDetails, LoginView } from './login-view.ts';
 import './login-view.ts';
 import type { PeerList } from './peer-list.ts';
 import './peer-list.ts';
@@ -99,6 +100,7 @@ template.innerHTML = `
 `;
 
 function describeError(e: unknown): string {
+  if (e instanceof Error && e.message.includes('Metered')) return e.message;
   if (e instanceof ConfluenceError) {
     if (e.status === 401 || e.status === 403) return 'Credenciales o permisos no válidos en Confluence.';
     if (e.status === 404) return 'No se encuentra la página de Confluence.';
@@ -133,7 +135,7 @@ export class StatimApp extends HTMLElement {
     this.#aside = root.querySelector('aside')!;
     this.#peerList = root.querySelector('peer-list')!;
 
-    this.#login.addEventListener('login', (e) => void this.#onLogin((e as CustomEvent<ConfluenceCredentials>).detail));
+    this.#login.addEventListener('login', (e) => void this.#onLogin((e as CustomEvent<LoginDetails>).detail));
     this.#logoutButton.addEventListener('click', () => void this.#logout(''));
     this.#peersButton.addEventListener('click', () => this.#togglePeers());
     this.#peerList.addEventListener('count', (e) => {
@@ -165,12 +167,22 @@ export class StatimApp extends HTMLElement {
     this.#session?.stop();
   }
 
-  async #onLogin(credentials: ConfluenceCredentials): Promise<void> {
+  async #onLogin(details: LoginDetails): Promise<void> {
     this.#login.busy = true;
     this.#login.error = '';
     if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission();
     try {
-      await this.#startSession(credentials);
+      let iceServers: RTCIceServer[] | undefined;
+      if (details.meteredApiKey) {
+        iceServers = await fetchMeteredIceServers(details.meteredApiKey, details.meteredDomain);
+      }
+      const credentials: ConfluenceCredentials = {
+        email: details.email,
+        token: details.token,
+        pageId: details.pageId,
+        baseUrl: details.baseUrl,
+      };
+      await this.#startSession(credentials, iceServers);
       await saveCredentials(credentials);
     } catch (e) {
       this.#login.error = describeError(e);
@@ -179,8 +191,8 @@ export class StatimApp extends HTMLElement {
     }
   }
 
-  async #startSession(credentials: ConfluenceCredentials): Promise<void> {
-    const session = new Session(credentials);
+  async #startSession(credentials: ConfluenceCredentials, iceServers?: RTCIceServer[]): Promise<void> {
+    const session = new Session(credentials, iceServers);
     session.registry.addEventListener('error', this.#onRegistryError);
     session.registry.addEventListener('signal', this.#clearError);
     session.registry.addEventListener('peer', this.#clearError);

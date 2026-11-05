@@ -5,7 +5,7 @@ import type { Session } from '../core/session.ts';
 import './chat-room.ts';
 import type { ChatRoom } from './chat-room.ts';
 import './login-view.ts';
-import type { LoginView } from './login-view.ts';
+import type { LoginDetails, LoginView } from './login-view.ts';
 import './peer-avatar.ts';
 
 function mount<T extends HTMLElement>(tag: string): T {
@@ -32,6 +32,39 @@ describe('<login-view>', () => {
     view.busy = true;
     expect(view.shadowRoot!.querySelector('[role=alert]')!.textContent).toBe('Credenciales no válidas');
     expect(view.shadowRoot!.querySelector('button')!.disabled).toBe(true);
+  });
+
+  it('emits meteredDomain and meteredApiKey when provided in the TURN section', () => {
+    const view = mount<LoginView>('login-view');
+    view.values = { email: 'ana@x.com', token: 'tok', pageId: '42', baseUrl: '' };
+    const domainInput = view.shadowRoot!.querySelector('input[name=meteredDomain]') as HTMLInputElement;
+    const keyInput = view.shadowRoot!.querySelector('input[name=meteredApiKey]') as HTMLInputElement;
+    domainInput.value = ' testteam ';
+    keyInput.value = ' test-key ';
+    const onLogin = vi.fn();
+    view.addEventListener('login', (e) => onLogin((e as CustomEvent<LoginDetails>).detail));
+
+    view.shadowRoot!.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+
+    expect(onLogin).toHaveBeenCalledWith({
+      email: 'ana@x.com',
+      token: 'tok',
+      pageId: '42',
+      baseUrl: '',
+      meteredDomain: 'testteam',
+      meteredApiKey: 'test-key',
+    });
+  });
+
+  it('never restores meteredDomain or meteredApiKey when values setter is called', () => {
+    const view = mount<LoginView>('login-view');
+    const domainInput = view.shadowRoot!.querySelector('input[name=meteredDomain]') as HTMLInputElement;
+    const keyInput = view.shadowRoot!.querySelector('input[name=meteredApiKey]') as HTMLInputElement;
+    domainInput.value = 'sensitive-domain';
+    keyInput.value = 'secret-key';
+    view.values = { email: 'ana@x.com' };
+    expect(domainInput.value).toBe('');
+    expect(keyInput.value).toBe('');
   });
 });
 

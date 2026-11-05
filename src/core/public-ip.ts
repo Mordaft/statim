@@ -1,4 +1,4 @@
-// Reads the server-reflexive candidate gathered via STUN; returns '' if unavailable.
+// Reads the server-reflexive or relay candidate gathered via STUN/TURN; returns '' if unavailable.
 export async function detectPublicIp(iceServers: RTCIceServer[], timeoutMs = 5000): Promise<string> {
   const pc = new RTCPeerConnection({ iceServers });
   pc.createDataChannel('ip');
@@ -9,7 +9,7 @@ export async function detectPublicIp(iceServers: RTCIceServer[], timeoutMs = 500
         if (!candidate) {
           clearTimeout(timer);
           resolve('');
-        } else if (candidate.type === 'srflx' && candidate.address) {
+        } else if ((candidate.type === 'srflx' || candidate.type === 'relay') && candidate.address) {
           clearTimeout(timer);
           resolve(candidate.address);
         }

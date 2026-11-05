@@ -1,4 +1,4 @@
-#Requires -Version 7
+#Requires -Version 5.1
 <#
 .SYNOPSIS
   Proxy local para llamar a la API REST de Confluence desde Statim sin problemas de CORS.
@@ -14,7 +14,7 @@ param(
   [int]$Port = 8787,
 
   # Orígenes del navegador autorizados (CORS).
-  [string[]]$AllowedOrigin = @('http://localhost:5173', 'http://localhost:4173'),
+  [string[]]$AllowedOrigin = @('http://localhost:5173','http://localhost:5174', 'http://localhost:4173'),
 
   # Caracteres del cuerpo mostrados en consola (0 = no mostrar).
   [int]$PreviewLength = 500
@@ -29,6 +29,8 @@ $target = $TargetUrl.GetLeftPart([UriPartial]::Authority)
 
 $forwardHeaders = @('Authorization', 'Accept')
 $returnHeaders = @('Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset')
+
+Add-Type -AssemblyName System.Net.Http
 
 $client = [System.Net.Http.HttpClient]::new()
 $client.Timeout = [TimeSpan]::FromSeconds(30)

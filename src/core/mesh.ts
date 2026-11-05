@@ -24,7 +24,7 @@ const MAX_PLAIN_BYTES = config.historyMaxBytes * 10;
 const MAX_FRAME_BYTES = config.historyMaxBytes + 1024;
 const MAX_ENTRIES = 5000;
 const MAX_SDP = 20_000;
-const ICE_GATHER_TIMEOUT_MS = 4000;
+const ICE_GATHER_TIMEOUT_MS = 7000;
 const DISCONNECT_GRACE_MS = 15_000;
 const RETRY_DELAY_MS = 10_000;
 // Each retry costs Confluence requests: retry once, and only if the peer did answer.
@@ -61,15 +61,17 @@ export interface MessageBatch {
  */
 export class Mesh extends EventTarget {
   readonly #registry: Registry;
+  readonly #iceServers: RTCIceServer[];
   readonly #links = new Map<string, Link>();
   readonly #pending = new Map<string, Frame[]>();
   // Serializes processing per sender so overlapping histories don't race on the unique msgId index.
   readonly #receiving = new Map<string, Promise<void>>();
   #lastOwnTs = 0;
 
-  constructor(registry: Registry) {
+  constructor(registry: Registry, iceServers?: RTCIceServer[]) {
     super();
     this.#registry = registry;
+    this.#iceServers = iceServers ?? config.iceServers;
   }
 
   async start(): Promise<void> {
@@ -200,7 +202,7 @@ export class Mesh extends EventTarget {
   }
 
   #createLink(email: string, session: string, initiator: boolean, attempts: number): Link {
-    const pc = new RTCPeerConnection({ iceServers: config.iceServers });
+    const pc = new RTCPeerConnection({ iceServers: this.#iceServers });
     const link: Link = { email, session, pc, initiator, attempts };
     this.#links.set(email, link);
 

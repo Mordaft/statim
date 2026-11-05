@@ -21,6 +21,8 @@ export const config = {
   confluenceBaseUrl: (env.VITE_CONFLUENCE_BASE_URL as string | undefined) ?? '',
   pageId: (env.VITE_CONFLUENCE_PAGE_ID as string | undefined) ?? '',
   iceServers,
+  meteredDomain: (env.VITE_METERED_DOMAIN as string | undefined) ?? '',
+  meteredApiKey: (env.VITE_METERED_API_KEY as string | undefined) ?? '',
   seedRotationMs: 60 * 60 * 1000,
   seedGraceMs: 10 * 60 * 1000,
   // Peers re-announce every rotation; silence beyond this means they left.

@@ -1,5 +1,10 @@
 import type { ConfluenceCredentials } from '../core/confluence-client.ts';
 
+export interface LoginDetails extends ConfluenceCredentials {
+  meteredDomain?: string;
+  meteredApiKey?: string;
+}
+
 const template = document.createElement('template');
 template.innerHTML = `
   <style>
@@ -33,6 +38,24 @@ template.innerHTML = `
       border-radius: var(--radius);
       background: var(--surface);
       color: var(--text);
+    }
+    details.turn-section {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.625rem 0.75rem;
+      background: var(--surface);
+    }
+    details.turn-section summary {
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      user-select: none;
+    }
+    .turn-fields {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
     }
     button {
       font: inherit;
@@ -73,13 +96,25 @@ template.innerHTML = `
     <label>URL de Confluence (vacío = mismo origen)
       <input name="baseUrl" type="url" placeholder="https://tu-sitio.atlassian.net" />
     </label>
+    <details class="turn-section">
+      <summary>Conexión tras cortafuegos / proxy (TURN TLS)</summary>
+      <div class="turn-fields">
+        <label>Subdominio de Metered
+          <input name="meteredDomain" type="text" placeholder="subdominio.metered.live" autocomplete="off" />
+        </label>
+        <label>API Key de Metered
+          <input name="meteredApiKey" type="password" placeholder="Clave de Metered" autocomplete="off" />
+        </label>
+        <p class="hint">Usará TURNS sobre TLS (puerto 443). Estos datos son sensibles y no se almacenan.</p>
+      </div>
+    </details>
     <p class="hint">El token se guarda sin cifrar en este dispositivo.</p>
     <p class="error" role="alert"></p>
     <button type="submit">Entrar</button>
   </form>
 `;
 
-/** Emits `login` (CustomEvent<ConfluenceCredentials>). */
+/** Emits `login` (CustomEvent<LoginDetails>). */
 export class LoginView extends HTMLElement {
   #form: HTMLFormElement;
   #error: HTMLElement;
@@ -96,10 +131,19 @@ export class LoginView extends HTMLElement {
       e.preventDefault();
       const data = new FormData(this.#form);
       const value = (k: string) => String(data.get(k) ?? '').trim();
+      const detail: LoginDetails = {
+        email: value('email'),
+        token: value('token'),
+        pageId: value('pageId'),
+        baseUrl: value('baseUrl'),
+      };
+      const meteredDomain = value('meteredDomain');
+      const meteredApiKey = value('meteredApiKey');
+      if (meteredDomain) detail.meteredDomain = meteredDomain;
+      if (meteredApiKey) detail.meteredApiKey = meteredApiKey;
+
       this.dispatchEvent(
-        new CustomEvent<ConfluenceCredentials>('login', {
-          detail: { email: value('email'), token: value('token'), pageId: value('pageId'), baseUrl: value('baseUrl') },
-        }),
+        new CustomEvent<LoginDetails>('login', { detail }),
       );
     });
   }
@@ -109,6 +153,11 @@ export class LoginView extends HTMLElement {
       const input = this.#form.elements.namedItem(key) as HTMLInputElement;
       input.value = c[key] ?? '';
     }
+    // Sensitive TURN parameters are never restored or persisted
+    const domainInput = this.#form.elements.namedItem('meteredDomain') as HTMLInputElement | null;
+    if (domainInput) domainInput.value = '';
+    const keyInput = this.#form.elements.namedItem('meteredApiKey') as HTMLInputElement | null;
+    if (keyInput) keyInput.value = '';
   }
 
   set error(message: string) {

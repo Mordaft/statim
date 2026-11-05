@@ -1,4 +1,4 @@
-#Requires -Version 7
+#Requires -Version 5.1
 <#
 .SYNOPSIS
   Mock en memoria de la API de comentarios de Confluence Cloud (v2) para probar varios clientes Statim en local.
@@ -127,9 +127,11 @@ function Invoke-Route([System.Net.HttpListenerRequest]$req, [System.Net.HttpList
 
   if ($path -match '^/wiki/api/v2/pages/([^/]+)/footer-comments$' -and $method -eq 'GET') {
     $pageId = [Uri]::UnescapeDataString($Matches[1])
-    $limit = [Math]::Clamp([int]($req.QueryString['limit'] ?? 25), 1, 250)
-    $offset = [Math]::Max(0, [int]($req.QueryString['cursor'] ?? 0))
-    $sort = $req.QueryString['sort'] ?? 'created-date'
+    $rawLimit = if ($req.QueryString['limit']) { [int]$req.QueryString['limit'] } else { 25 }
+    $limit = [Math]::Min([Math]::Max($rawLimit, 1), 250)
+    $rawCursor = if ($req.QueryString['cursor']) { [int]$req.QueryString['cursor'] } else { 0 }
+    $offset = [Math]::Max(0, $rawCursor)
+    $sort = if ($req.QueryString['sort']) { $req.QueryString['sort'] } else { 'created-date' }
 
     $all = @($comments | Where-Object pageId -eq $pageId | Sort-Object id -Descending:($sort -eq '-created-date'))
     $page = @($all | Select-Object -Skip $offset -First $limit)
@@ -170,7 +172,8 @@ try {
     }
     finally {
       $color = if ($res.StatusCode -lt 400) { 'DarkGray' } else { 'Red' }
-      Write-Host ("[{0}] {1,-7} {2} -> {3}  ({4})  comentarios={5}" -f (Get-Date -Format 'HH:mm:ss'), $req.HttpMethod, $req.Url.PathAndQuery, $res.StatusCode, ($author ?? '-'), $comments.Count) -ForegroundColor $color
+      $authorDisplay = if ($author) { $author } else { '-' }
+      Write-Host ("[{0}] {1,-7} {2} -> {3}  ({4})  comentarios={5}" -f (Get-Date -Format 'HH:mm:ss'), $req.HttpMethod, $req.Url.PathAndQuery, $res.StatusCode, $authorDisplay, $comments.Count) -ForegroundColor $color
       $res.Close()
     }
   }

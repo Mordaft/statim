@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { FAKE_URL, PAGE_ID } from './env.ts';
+import { FAKE_URL, PAGE_ID, PROXY_URL } from './env.ts';
 import { connectedText, join, message, openClient, send, snapshot, status, type Client } from './helpers.ts';
 
 interface AdminComment {
@@ -19,10 +19,10 @@ test.describe.serial('Sala con 3 clientes (localproxy + fake-atlassian)', () => 
   });
 
   test.afterAll(async () => {
-    await Promise.all(clients.map((c) => c.context.close().catch(() => {})));
+    await Promise.all(clients.map((c) => c.context.close().catch(() => { })));
   });
 
-  test('los 3 clientes se unen y se conectan entre sí por WebRTC', async ({}, testInfo) => {
+  test('los 3 clientes se unen y se conectan entre sí por WebRTC', async ({ }, testInfo) => {
     await test.step('login de los 3 clientes', async () => {
       await Promise.all(clients.map(join));
     });
@@ -42,7 +42,7 @@ test.describe.serial('Sala con 3 clientes (localproxy + fake-atlassian)', () => 
     await snapshot(testInfo, clients, 'Conectados');
   });
 
-  test('los mensajes de cada cliente llegan a los otros dos', async ({}, testInfo) => {
+  test('los mensajes de cada cliente llegan a los otros dos', async ({ }, testInfo) => {
     const texts = new Map<Client, string>();
     for (const sender of clients) {
       const text = `Hola desde ${sender.name} #${Date.now()}`;
@@ -86,7 +86,7 @@ test.describe.serial('Sala con 3 clientes (localproxy + fake-atlassian)', () => 
     });
   });
 
-  test('al recargar, el historial persiste y el cliente se reconecta', async ({}, testInfo) => {
+  test('al recargar, el historial persiste y el cliente se reconecta', async ({ }, testInfo) => {
     const page = ana().page;
     await page.reload();
 
@@ -111,7 +111,7 @@ test.describe.serial('Sala con 3 clientes (localproxy + fake-atlassian)', () => 
     await snapshot(testInfo, clients, 'Tras recargar');
   });
 
-  test('cuando un cliente se va, los demás lo detectan', async ({}, testInfo) => {
+  test('cuando un cliente se va, los demás lo detectan', async ({ }, testInfo) => {
     await cid().context.close();
 
     await expect(status(ana().page)).toHaveText(connectedText(1));
@@ -126,7 +126,7 @@ test.describe.serial('Sala con 3 clientes (localproxy + fake-atlassian)', () => 
     await snapshot(testInfo, [ana(), bob()], 'Tras salir Cid');
   });
 
-  test('quien cierra la app y vuelve recupera lo que se perdió (historial 10 h)', async ({}, testInfo) => {
+  test('quien cierra la app y vuelve recupera lo que se perdió (historial 10 h)', async ({ }, testInfo) => {
     const missed = `Mientras Bob no estaba #${Date.now()}`;
 
     await test.step('Bob cierra la app', async () => {
@@ -175,7 +175,7 @@ test.describe.serial('Sala con 3 clientes (localproxy + fake-atlassian)', () => 
     await snapshot(testInfo, [dan], 'Dan llega tarde');
   });
 
-  test('leer mensajes antiguos no salta al recibir nuevos; el aviso lleva a lo último', async ({}, testInfo) => {
+  test('leer mensajes antiguos no salta al recibir nuevos; el aviso lleva a lo último', async ({ }, testInfo) => {
     const list = bob().page.locator('chat-room ol');
     const jump = bob().page.getByRole('button', { name: /mensajes? nuevos?/ });
 
@@ -226,4 +226,100 @@ test('la pantalla de acceso es mobile-first', async ({ page }, testInfo) => {
   const button = await page.getByRole('button', { name: 'Entrar' }).boundingBox();
   expect(button!.height).toBeGreaterThanOrEqual(44);
   await testInfo.attach('Login móvil', { body: await page.screenshot(), contentType: 'image/png' });
+});
+
+test('inicio de sesión con subdominio y API Key de Metered usa TURNS y nunca los almacena', async ({ browser }, testInfo) => {
+  const eva = await openClient(browser, 'Eva');
+  const { page } = eva;
+  const domain = process.env.VITE_METERED_DOMAIN || process.env.METERED_DOMAIN || 'subdomain.metered.live';
+  const apiKey = process.env.VITE_METERED_API_KEY || process.env.METERED_API_KEY || 'test-metered-key-safe';
+
+  // Si no se proporcionaron credenciales reales por entorno, simular respuesta TURNS para el subdominio por defecto
+  if (domain === 'subdomain.metered.live') {
+    await page.route(`https://${domain}/**`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            urls: `turns:${domain}:443?transport=tcp`,
+            username: 'mock-user',
+            credential: 'mock-password',
+          },
+        ]),
+      });
+    });
+  }
+
+  await test.step('introducir credenciales de Confluence, subdominio y API Key en la sección TURN', async () => {
+    await page.getByLabel('Email de Atlassian').fill(eva.email);
+    await page.getByLabel('API token').fill('fake-token');
+    await page.getByLabel('ID de la página de Confluence').fill(PAGE_ID);
+    await page.getByLabel('URL de Confluence (vacío = mismo origen)').fill(PROXY_URL);
+
+    // Abrir la sección separada de TURN TLS
+    await page.getByText(/TURN TLS/).click();
+    const domainInput = page.getByLabel(/Subdominio de Metered/);
+    const keyInput = page.getByLabel(/API Key de Metered/);
+    await expect(domainInput).toBeVisible();
+    await expect(keyInput).toBeVisible();
+    await domainInput.fill(domain);
+    await keyInput.fill(apiKey);
+    await snapshot(testInfo, [eva], 'Login con Metered');
+  });
+
+  await test.step('iniciar sesión y verificar entrada a la sala', async () => {
+    await page.getByRole('button', { name: 'Entrar' }).click();
+    await expect(page.getByRole('textbox', { name: 'Mensaje' })).toBeVisible();
+  });
+
+  await test.step('ni la API Key ni el subdominio se almacenan en localStorage ni en sessionStorage', async () => {
+    const storages = await page.evaluate(
+      ({ key, dom }) => {
+        const inLocal = Object.values(localStorage).some((v) => typeof v === 'string' && (v.includes(key) || v.includes(dom)));
+        const inSession = Object.values(sessionStorage).some((v) => typeof v === 'string' && (v.includes(key) || v.includes(dom)));
+        return { inLocal, inSession };
+      },
+      { key: apiKey, dom: domain },
+    );
+    expect(storages.inLocal).toBe(false);
+    expect(storages.inSession).toBe(false);
+  });
+
+  await test.step('ni la API Key ni el subdominio se almacenan en IndexedDB', async () => {
+    const inIdb = await page.evaluate(
+      async ({ key, dom }) => {
+        return new Promise<boolean>((resolve) => {
+          const req = indexedDB.open('statim');
+          req.onsuccess = () => {
+            const idb = req.result;
+            if (!idb.objectStoreNames.contains('settings')) return resolve(false);
+            const tx = idb.transaction('settings', 'readonly');
+            const store = tx.objectStore('settings');
+            const getAll = store.getAll();
+            getAll.onsuccess = () => {
+              const values = JSON.stringify(getAll.result);
+              resolve(values.includes(key) || values.includes(dom));
+            };
+            getAll.onerror = () => resolve(false);
+          };
+          req.onerror = () => resolve(false);
+        });
+      },
+      { key: apiKey, dom: domain },
+    );
+    expect(inIdb).toBe(false);
+  });
+
+  await test.step('al salir, el formulario vuelve a mostrarse y los campos sensibles están vacíos', async () => {
+    await page.getByRole('button', { name: 'Salir' }).click();
+    await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible();
+    await page.getByText(/TURN TLS/).click();
+    const domainInput = page.getByLabel(/Subdominio de Metered/);
+    const keyInput = page.getByLabel(/API Key de Metered/);
+    await expect(domainInput).toHaveValue('');
+    await expect(keyInput).toHaveValue('');
+  });
+
+  await eva.context.close();
 });
