@@ -1,5 +1,5 @@
 const CACHE = 'statim-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg'];
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
@@ -29,7 +29,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(() => caches.match('/index.html')));
+    event.respondWith(fetch(request).catch(() => caches.match(new URL('./index.html', self.location).href)));
     return;
   }
 
@@ -52,7 +52,7 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       const client = list.find((c) => 'focus' in c);
-      return client ? client.focus() : self.clients.openWindow('/');
+      return client ? client.focus() : self.clients.openWindow(self.registration.scope);
     }),
   );
 });

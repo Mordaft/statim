@@ -379,7 +379,8 @@ export class StatimApp extends HTMLElement {
     const title = from.split('@')[0];
     // One notification per frame: the live message, or a summary when only history was recovered.
     const body = current ? current.text.slice(0, 140) : `${messages.length} mensaje(s) recuperado(s)`;
-    const options: NotificationOptions = { body, tag: 'statim', icon: '/icons/icon.svg' };
+    const icon = typeof window !== 'undefined' ? new URL('icons/icon.svg', window.location.href).href : './icons/icon.svg';
+    const options: NotificationOptions = { body, tag: 'statim', icon };
     const registration = await navigator.serviceWorker?.getRegistration();
     if (registration) await registration.showNotification(title, options);
     else new Notification(title, options);

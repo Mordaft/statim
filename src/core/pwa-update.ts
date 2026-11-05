@@ -1,5 +1,5 @@
 export interface PwaUpdateOptions {
-  /** URL of the service worker script. Defaults to '/sw.js'. */
+  /** URL of the service worker script. Defaults to './sw.js'. */
   swUrl?: string;
   /** Interval in ms to poll for service worker updates. Defaults to 60 minutes. */
   checkIntervalMs?: number;
@@ -22,7 +22,7 @@ export interface PwaUpdateController {
 
 export function registerPwaUpdate(options: PwaUpdateOptions = {}): PwaUpdateController {
   const {
-    swUrl = '/sw.js',
+    swUrl = './sw.js',
     checkIntervalMs = 60 * 60 * 1000,
     onUpdateAvailable,
     serviceWorker = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined,

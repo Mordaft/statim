@@ -19,7 +19,7 @@ function pwaPlugin(): Plugin {
       // Enumerate hashed assets from dist/assets
       const assetsDir = path.join(distDir, 'assets');
       const assetFiles = fs.existsSync(assetsDir)
-        ? fs.readdirSync(assetsDir).map((f) => `/assets/${f.replace(/\\/g, '/')}`)
+        ? fs.readdirSync(assetsDir).map((f) => `./assets/${f.replace(/\\/g, '/')}`)
         : [];
 
       // Generate unique cache version for this build
@@ -31,10 +31,10 @@ function pwaPlugin(): Plugin {
 
       // Precache the full shell including hashed JS and CSS
       const fullShell = [
-        '/',
-        '/index.html',
-        '/manifest.webmanifest',
-        '/icons/icon.svg',
+        './',
+        './index.html',
+        './manifest.webmanifest',
+        './icons/icon.svg',
         ...assetFiles,
       ];
       swContent = swContent.replace(
@@ -52,6 +52,7 @@ export default defineConfig(({ mode }) => {
   const target = env.CONFLUENCE_BASE_URL;
 
   return {
+    base: './',
     plugins: [pwaPlugin()],
     server: {
       proxy: target
