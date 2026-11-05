@@ -201,20 +201,23 @@ var e=Object.create,t=Object.defineProperty,n=Object.getOwnPropertyDescriptor,r=
       background: var(--surface);
       color: var(--text);
     }
-    details.turn-section {
+    details.turn-section,
+    details.proxy-section {
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 0.625rem 0.75rem;
       background: var(--surface);
     }
-    details.turn-section summary {
+    details.turn-section summary,
+    details.proxy-section summary {
       cursor: pointer;
       font-size: 0.875rem;
       font-weight: 500;
       color: var(--text);
       user-select: none;
     }
-    .turn-fields {
+    .turn-fields,
+    .proxy-fields {
       display: grid;
       gap: 0.75rem;
       margin-top: 0.75rem;
@@ -270,11 +273,28 @@ var e=Object.create,t=Object.defineProperty,n=Object.getOwnPropertyDescriptor,r=
         <p class="hint">Usará TURNS sobre TLS (puerto 443). Estos datos son sensibles y no se almacenan.</p>
       </div>
     </details>
+    <details class="proxy-section">
+      <summary>Proxy HTTP/HTTPS</summary>
+      <div class="proxy-fields">
+        <label>URL y puerto
+          <input name="proxyUrl" type="text" placeholder="http://proxy.ejemplo.com:8080" autocomplete="off" />
+        </label>
+        <label>Usuario
+          <input name="proxyUser" type="text" placeholder="Usuario" autocomplete="off" />
+        </label>
+        <label>Password
+          <input name="proxyPassword" type="password" placeholder="Password" autocomplete="current-password" />
+        </label>
+        <label>Lista de dominios excluidos
+          <input name="proxyExcludedDomains" type="text" placeholder="localhost, 127.0.0.1, .empresa.com" autocomplete="off" />
+        </label>
+      </div>
+    </details>
     <p class="hint">El token se guarda sin cifrar en este dispositivo.</p>
     <p class="error" role="alert"></p>
     <button type="submit">Entrar</button>
   </form>
-`;var bt=class extends HTMLElement{#e;#t;#n;constructor(){super();let e=this.attachShadow({mode:`open`});e.append(yt.content.cloneNode(!0)),this.#e=e.querySelector(`form`),this.#t=e.querySelector(`.error`),this.#n=e.querySelector(`button`),this.#e.addEventListener(`submit`,e=>{e.preventDefault();let t=new FormData(this.#e),n=e=>String(t.get(e)??``).trim(),r={email:n(`email`),token:n(`token`),pageId:n(`pageId`),baseUrl:n(`baseUrl`)},i=n(`meteredDomain`),a=n(`meteredApiKey`);i&&(r.meteredDomain=i),a&&(r.meteredApiKey=a),this.dispatchEvent(new CustomEvent(`login`,{detail:r}))})}set values(e){for(let t of[`email`,`token`,`pageId`,`baseUrl`]){let n=this.#e.elements.namedItem(t);n.value=e[t]??``}let t=this.#e.elements.namedItem(`meteredDomain`);t&&(t.value=``);let n=this.#e.elements.namedItem(`meteredApiKey`);n&&(n.value=``)}set error(e){this.#t.textContent=e}set busy(e){this.#n.disabled=e,this.#n.textContent=e?`Conectando…`:`Entrar`}};customElements.define(`login-view`,bt);var xt=document.createElement(`template`);xt.innerHTML=`
+`;var bt=class extends HTMLElement{#e;#t;#n;constructor(){super();let e=this.attachShadow({mode:`open`});e.append(yt.content.cloneNode(!0)),this.#e=e.querySelector(`form`),this.#t=e.querySelector(`.error`),this.#n=e.querySelector(`button`),this.#e.addEventListener(`submit`,e=>{e.preventDefault();let t=new FormData(this.#e),n=e=>String(t.get(e)??``).trim(),r={email:n(`email`),token:n(`token`),pageId:n(`pageId`),baseUrl:n(`baseUrl`)},i=n(`meteredDomain`),a=n(`meteredApiKey`);i&&(r.meteredDomain=i),a&&(r.meteredApiKey=a);let o=n(`proxyUrl`),s=n(`proxyUser`),c=n(`proxyPassword`),l=n(`proxyExcludedDomains`);o&&(r.proxyUrl=o),s&&(r.proxyUser=s),c&&(r.proxyPassword=c),l&&(r.proxyExcludedDomains=l),this.dispatchEvent(new CustomEvent(`login`,{detail:r}))})}set values(e){for(let t of[`email`,`token`,`pageId`,`baseUrl`]){let n=this.#e.elements.namedItem(t);n.value=e[t]??``}let t=this.#e.elements.namedItem(`meteredDomain`);t&&(t.value=``);let n=this.#e.elements.namedItem(`meteredApiKey`);n&&(n.value=``);let r=this.#e.elements.namedItem(`proxyUrl`);r&&(r.value=e.proxyUrl??``);let i=this.#e.elements.namedItem(`proxyUser`);i&&(i.value=e.proxyUser??``);let a=this.#e.elements.namedItem(`proxyPassword`);a&&(a.value=``);let o=this.#e.elements.namedItem(`proxyExcludedDomains`);o&&(o.value=e.proxyExcludedDomains??``)}set error(e){this.#t.textContent=e}set busy(e){this.#n.disabled=e,this.#n.textContent=e?`Conectando…`:`Entrar`}};customElements.define(`login-view`,bt);var xt=document.createElement(`template`);xt.innerHTML=`
   <style>
     :host {
       display: block;
