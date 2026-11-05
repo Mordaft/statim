@@ -12,7 +12,8 @@
     "test:e2e": "playwright test -c test-e2e/playwright.config.ts",
     "test:all": "pnpm test && pnpm test:e2e",
     "report:unit": "vite preview --outDir reports/unit --port 4180 --open",
-    "report:e2e": "playwright show-report reports/e2e"
+    "report:e2e": "playwright show-report reports/e2e",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "dexie": "^4.4.7",
@@ -23,6 +24,7 @@
     "@vitest/coverage-v8": "^5.1.0",
     "@vitest/ui": "^5.1.0",
     "fake-indexeddb": "^6.2.7",
+    "gh-pages": "^6.3.0",
     "happy-dom": "^21.0.4",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
