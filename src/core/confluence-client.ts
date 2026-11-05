@@ -1,6 +1,7 @@
 import { config } from '../config.ts';
 import { compressText, decompressText } from './compression.ts';
 import { fromBase64, toBase64 } from './crypto.ts';
+import { trace } from './diagnostics.ts';
 import { PREFIX, parseEnvelope, type Envelope } from './protocol.ts';
 import { RateLimiter } from './rate-limiter.ts';
 
@@ -87,16 +88,26 @@ export class ConfluenceClient {
 
   #request<T>(path: string, init: RequestInit, urgent: Urgency): Promise<T> {
     return this.#limiter.schedule(async () => {
+      trace('confluence.request', { path, method: init.method ?? 'GET' });
       const headers: Record<string, string> = { Authorization: this.#auth, Accept: 'application/json' };
       if (init.body) headers['Content-Type'] = 'application/json';
-      const res = await fetch(this.#base + path, { ...init, headers, credentials: 'omit' });
-      if (!res.ok) {
-        const retryAfter = Number(res.headers.get('Retry-After'));
-        const retryAfterMs = retryAfter > 0 ? retryAfter * 1000 : undefined;
-        if (retryAfterMs) this.#limiter.penalize(retryAfterMs);
-        throw new ConfluenceError(res.status, retryAfterMs);
+      try {
+        const res = await fetch(this.#base + path, { ...init, headers, credentials: 'omit' });
+        if (!res.ok) {
+          const retryAfter = Number(res.headers.get('Retry-After'));
+          const retryAfterMs = retryAfter > 0 ? retryAfter * 1000 : undefined;
+          if (retryAfterMs) this.#limiter.penalize(retryAfterMs);
+          trace('confluence.response_error', { path, status: res.status });
+          throw new ConfluenceError(res.status, retryAfterMs);
+        }
+        trace('confluence.response_ok', { path, status: res.status });
+        return (res.status === 204 ? undefined : await res.json()) as T;
+      } catch (err) {
+        if (!(err instanceof ConfluenceError)) {
+          trace('confluence.network_error', { path, error: err });
+        }
+        throw err;
       }
-      return (res.status === 204 ? undefined : await res.json()) as T;
     }, urgent);
   }
 

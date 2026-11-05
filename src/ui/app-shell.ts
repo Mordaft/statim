@@ -1,4 +1,5 @@
 import { ConfluenceError, type ConfluenceCredentials } from '../core/confluence-client.ts';
+import { trace } from '../core/diagnostics.ts';
 import type { MessageBatch } from '../core/mesh.ts';
 import { fetchMeteredIceServers } from '../core/metered.ts';
 import { clearToken, isComplete, loadCredentials, saveCredentials, Session } from '../core/session.ts';
@@ -270,6 +271,7 @@ export class StatimApp extends HTMLElement {
   };
 
   #onApplyUpdate(): void {
+    trace('pwa.update.applying');
     this.#updateApply.disabled = true;
     this.#updateApply.textContent = 'Actualizando...';
     this.#updateIndicator.disabled = true;
@@ -278,11 +280,18 @@ export class StatimApp extends HTMLElement {
   }
 
   #onDismissUpdate(): void {
+    trace('pwa.update.dismissed');
     this.#updateBanner.hidden = true;
     this.#updateIndicator.hidden = false;
   }
 
   async #onLogin(details: LoginDetails): Promise<void> {
+    trace('app.login_attempt', {
+      email: details.email,
+      pageId: details.pageId,
+      hasTurn: Boolean(details.meteredApiKey),
+      hasProxy: Boolean(details.proxyUrl),
+    });
     this.#login.busy = true;
     this.#login.error = '';
     if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission();
@@ -299,7 +308,9 @@ export class StatimApp extends HTMLElement {
       };
       await this.#startSession(credentials, iceServers);
       await saveCredentials(credentials);
+      trace('app.login_success', { email: details.email });
     } catch (e) {
+      trace('app.login_failed', { error: describeError(e) });
       this.#login.error = describeError(e);
     } finally {
       this.#login.busy = false;
@@ -307,6 +318,7 @@ export class StatimApp extends HTMLElement {
   }
 
   async #startSession(credentials: ConfluenceCredentials, iceServers?: RTCIceServer[]): Promise<void> {
+    trace('session.start', { email: credentials.email, pageId: credentials.pageId, iceServerCount: iceServers?.length ?? 0 });
     const session = new Session(credentials, iceServers);
     session.registry.addEventListener('error', this.#onRegistryError);
     session.registry.addEventListener('signal', this.#clearError);
@@ -327,6 +339,7 @@ export class StatimApp extends HTMLElement {
   }
 
   async #logout(error: string): Promise<void> {
+    trace('app.logout', { error });
     const session = this.#session;
     this.#session = undefined;
     session?.stop();

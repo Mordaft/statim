@@ -94,6 +94,7 @@ src/
     mesh.ts                RTCPeerConnection/DataChannel, envío y recepción
     history.ts             Payload {hist, current} con los mensajes propios de 10 h
     session.ts             Orquesta Registry + Mesh; credenciales
+    diagnostics.ts         Trazas y logs con buffer circular, sanitización y exportación
     identicon.ts           Avatar SVG
     *.test.ts              Pruebas unitarias
   ui/
@@ -370,7 +371,7 @@ Web Components con Shadow DOM, sin framework. Los estilos usan las variables CSS
 | Componente | API |
 |---|---|
 | `<statim-app>` | Orquesta login ↔ sala. Muestra el estado en la cabecera. Un 401/403 → vuelve al login. Si `document.hidden`, muestra **una** notificación por lote: el mensaje actual o "N mensaje(s) recuperado(s)". |
-| `<login-view>` | Setters `values`, `error`, `busy`. Evento `login` (`CustomEvent<LoginDetails>`). Sección de configuración TURN/TLS que nunca almacena la clave en disco. |
+| `<login-view>` | Setters `values`, `error`, `busy`. Evento `login` (`CustomEvent<LoginDetails>`). Secciones para TURN/TLS, proxy y visor/exportador de logs de diagnóstico. Touch targets táctiles optimizados para móvil (≥ 52 px en inputs y botones). |
 | `<chat-room>` | `attach(session)` / `detach()`. Muestra los últimos 200 mensajes. Enter envía, Shift+Enter hace salto de línea. Repintado sin saltos (ver abajo). |
 | `<peer-list>` | `attach(session)` / `detach()`. Evento `count` con el número de conectados. |
 | `<peer-avatar email="…" online>` | Identicon cacheado. |

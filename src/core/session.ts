@@ -1,6 +1,7 @@
 import { config } from '../config.ts';
 import { ConfluenceClient, type ConfluenceCredentials } from './confluence-client.ts';
 import { db, getSetting, setSetting } from './db.ts';
+import { trace } from './diagnostics.ts';
 import { Mesh } from './mesh.ts';
 import { Registry } from './registry.ts';
 
@@ -38,16 +39,20 @@ export class Session {
   }
 
   async start(): Promise<void> {
+    trace('session.start', { email: this.registry.email });
     try {
       await this.registry.start();
       await this.mesh.start();
+      trace('session.started');
     } catch (e) {
+      trace('session.start_failed', { error: e });
       this.stop();
       throw e;
     }
   }
 
   stop(): void {
+    trace('session.stop');
     this.mesh.stop();
     this.registry.stop();
   }

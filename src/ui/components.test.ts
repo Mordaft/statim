@@ -104,6 +104,33 @@ describe('<login-view>', () => {
     view.values = { email: 'ana@x.com' };
     expect(passInput.value).toBe('');
   });
+
+  it('displays, copies, and clears diagnostic logs from the logs section', async () => {
+    const view = mount<LoginView>('login-view');
+    const logsDetails = view.shadowRoot!.querySelector('details.logs-section') as HTMLDetailsElement;
+    const logsOutput = view.shadowRoot!.querySelector('.logs-output') as HTMLPreElement;
+    const copyBtn = view.shadowRoot!.querySelector('.btn-copy-logs') as HTMLButtonElement;
+    const clearBtn = view.shadowRoot!.querySelector('.btn-clear-logs') as HTMLButtonElement;
+
+    expect(logsDetails).not.toBeNull();
+    expect(logsOutput).not.toBeNull();
+
+    logsDetails.open = true;
+    logsDetails.dispatchEvent(new Event('toggle'));
+    expect(logsOutput.textContent).toBeDefined();
+
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: writeTextMock },
+      configurable: true,
+      writable: true,
+    });
+    copyBtn.click();
+    await vi.waitFor(() => expect(writeTextMock).toHaveBeenCalled());
+
+    clearBtn.click();
+    expect(logsOutput.textContent).toBe('No hay registros guardados.');
+  });
 });
 
 describe('<peer-avatar>', () => {
