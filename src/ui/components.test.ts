@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConfluenceCredentials } from '../core/confluence-client.ts';
 import { db, type Message } from '../core/db.ts';
 import type { Session } from '../core/session.ts';
+import './app-shell.ts';
+import type { StatimApp } from './app-shell.ts';
 import './chat-room.ts';
 import type { ChatRoom } from './chat-room.ts';
 import './login-view.ts';
@@ -239,6 +241,51 @@ describe('<chat-room>', () => {
       expect(room.shadowRoot!.querySelectorAll('li.arrived')).toHaveLength(0);
       emit(session, [msg('nuevo', 5000)]);
       expect(room.shadowRoot!.querySelectorAll('li.arrived')).toHaveLength(1);
+    });
+  });
+
+  describe('<statim-app> update notification', () => {
+    it('displays update banner when update is available and allows applying update', () => {
+      const app = mount<StatimApp>('statim-app');
+      const banner = app.shadowRoot!.querySelector<HTMLElement>('.update-banner')!;
+      const applyBtn = app.shadowRoot!.querySelector<HTMLButtonElement>('.update-apply')!;
+      const indicator = app.shadowRoot!.querySelector<HTMLButtonElement>('.update-indicator')!;
+
+      expect(banner.hidden).toBe(true);
+      expect(indicator.hidden).toBe(true);
+
+      const applyMock = vi.fn();
+      app.showUpdateNotification(applyMock);
+
+      expect(banner.hidden).toBe(false);
+      expect(indicator.hidden).toBe(true);
+
+      applyBtn.click();
+      expect(applyMock).toHaveBeenCalledTimes(1);
+      expect(applyBtn.disabled).toBe(true);
+      expect(applyBtn.textContent).toBe('Actualizando...');
+    });
+
+    it('shows indicator in header when update banner is dismissed and allows updating from indicator', () => {
+      const app = mount<StatimApp>('statim-app');
+      const banner = app.shadowRoot!.querySelector<HTMLElement>('.update-banner')!;
+      const dismissBtn = app.shadowRoot!.querySelector<HTMLButtonElement>('.update-dismiss')!;
+      const indicator = app.shadowRoot!.querySelector<HTMLButtonElement>('.update-indicator')!;
+
+      const applyMock = vi.fn();
+      window.dispatchEvent(new CustomEvent('statim:update-available', { detail: applyMock }));
+
+      expect(banner.hidden).toBe(false);
+      expect(indicator.hidden).toBe(true);
+
+      dismissBtn.click();
+      expect(banner.hidden).toBe(true);
+      expect(indicator.hidden).toBe(false);
+
+      indicator.click();
+      expect(applyMock).toHaveBeenCalledTimes(1);
+      expect(indicator.disabled).toBe(true);
+      expect(indicator.textContent).toBe('Actualizando...');
     });
   });
 });

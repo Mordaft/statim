@@ -88,6 +88,7 @@ src/
     protocol.ts            Sobres de Confluence y su validación
     rate-limiter.ts        Cola única + espaciado + presupuesto diario
     confluence-client.ts   REST v2 footer-comments (vía RateLimiter)
+    pwa-update.ts          Ciclo de vida y detección de actualizaciones de la PWA
     public-ip.ts           IP pública vía candidato STUN srflx
     registry.ts            Anuncios, rotación, sondeo, señalización agrupada
     mesh.ts                RTCPeerConnection/DataChannel, envío y recepción
@@ -390,11 +391,17 @@ Web Components con Shadow DOM, sin framework. Los estilos usan las variables CSS
 
 - [manifest.webmanifest](public/manifest.webmanifest): `standalone`, orientación vertical, icono SVG `any maskable`.
 - [sw.js](public/sw.js):
-  - Pre-cachea el shell.
+  - Pre-cachea el shell completo (HTML, manifest, iconos y los bundles JS/CSS generados por Vite).
   - Navegación con estrategia *network-first* (respaldo `index.html`); recursos con *stale-while-revalidate*.
   - **Nunca** cachea `/wiki` ni peticiones de otro origen.
   - Gestiona `notificationclick`.
-  - Solo se registra en producción. Si cambias recursos del shell, sube la versión de `CACHE`.
+  - Escucha el mensaje `SKIP_WAITING` para activarse sin interrumpir sesiones activas sin consentimiento.
+- **Mecanismo de actualización ([pwa-update.ts](src/core/pwa-update.ts)):**
+  - Registro con `updateViaCache: 'none'` para forzar comprobación de cambios en la red.
+  - Comprobaciones proactivas: al registrarse, en `visibilitychange` (al volver a primer plano), en `focus`, en reconexión `online` y sondeo periódico.
+  - Notificación en la interfaz (`<statim-app>`): banner superior no invasivo con botón «Actualizar» y opción de descartar (dejando un botón sutil en la cabecera).
+  - Al pulsar «Actualizar»: envía `SKIP_WAITING` al Service Worker en espera y recarga en `controllerchange`.
+  - Build automático (`vite.config.ts`): inyecta automáticamente la versión de caché y los nombres hasheados de los assets en `dist/sw.js` en cada compilación.
 
 ---
 

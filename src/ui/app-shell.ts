@@ -14,7 +14,7 @@ template.innerHTML = `
   <style>
     :host {
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto auto 1fr;
       height: 100%;
       padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
@@ -48,6 +48,75 @@ template.innerHTML = `
       border-radius: var(--radius);
       background: transparent;
       color: inherit;
+    }
+    .update-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.8125rem;
+    }
+    .update-msg {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .update-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+    .update-apply {
+      font: inherit;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      min-height: 2rem;
+      padding: 0 0.75rem;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: var(--accent-text);
+      cursor: pointer;
+    }
+    .update-apply:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    .update-dismiss {
+      font: inherit;
+      font-size: 0.875rem;
+      min-height: 2rem;
+      min-width: 2rem;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .update-indicator {
+      font: inherit;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      min-height: 2.25rem;
+      padding: 0 0.75rem;
+      border: 1px solid rgb(255 255 255 / 0.5);
+      border-radius: var(--radius);
+      background: rgb(255 255 255 / 0.15);
+      color: inherit;
+      cursor: pointer;
+    }
+    .update-indicator:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
     }
     main {
       position: relative;
@@ -89,9 +158,17 @@ template.innerHTML = `
   <header>
     <h1>Statim</h1>
     <span class="status" role="status"></span>
+    <button class="update-indicator" type="button" hidden title="Actualización disponible">Actualizar</button>
     <button class="peers" type="button" hidden aria-expanded="false">Equipo</button>
     <button class="logout" type="button" hidden>Salir</button>
   </header>
+  <div class="update-banner" role="status" hidden>
+    <span class="update-msg">Nueva versión de Statim disponible.</span>
+    <div class="update-actions">
+      <button class="update-apply" type="button">Actualizar</button>
+      <button class="update-dismiss" type="button" aria-label="Cerrar aviso de actualización">✕</button>
+    </div>
+  </div>
   <main>
     <login-view hidden></login-view>
     <chat-room hidden></chat-room>
@@ -119,6 +196,11 @@ export class StatimApp extends HTMLElement {
   #chat: ChatRoom;
   #aside: HTMLElement;
   #peerList: PeerList;
+  #updateBanner: HTMLElement;
+  #updateApply: HTMLButtonElement;
+  #updateDismiss: HTMLButtonElement;
+  #updateIndicator: HTMLButtonElement;
+  #applyUpdateFn?: () => void;
   #session?: Session;
   #connected = 0;
   #lastError = '';
@@ -134,10 +216,17 @@ export class StatimApp extends HTMLElement {
     this.#chat = root.querySelector('chat-room')!;
     this.#aside = root.querySelector('aside')!;
     this.#peerList = root.querySelector('peer-list')!;
+    this.#updateBanner = root.querySelector('.update-banner')!;
+    this.#updateApply = root.querySelector('.update-apply')!;
+    this.#updateDismiss = root.querySelector('.update-dismiss')!;
+    this.#updateIndicator = root.querySelector('.update-indicator')!;
 
     this.#login.addEventListener('login', (e) => void this.#onLogin((e as CustomEvent<LoginDetails>).detail));
     this.#logoutButton.addEventListener('click', () => void this.#logout(''));
     this.#peersButton.addEventListener('click', () => this.#togglePeers());
+    this.#updateApply.addEventListener('click', () => this.#onApplyUpdate());
+    this.#updateIndicator.addEventListener('click', () => this.#onApplyUpdate());
+    this.#updateDismiss.addEventListener('click', () => this.#onDismissUpdate());
     this.#peerList.addEventListener('count', (e) => {
       this.#connected = (e as CustomEvent<number>).detail;
       this.#renderStatus();
@@ -147,6 +236,7 @@ export class StatimApp extends HTMLElement {
   async connectedCallback() {
     window.addEventListener('online', this.#renderStatus);
     window.addEventListener('offline', this.#renderStatus);
+    window.addEventListener('statim:update-available', this.#onUpdateAvailable);
     this.#renderStatus();
 
     const credentials = await loadCredentials();
@@ -164,7 +254,32 @@ export class StatimApp extends HTMLElement {
   disconnectedCallback() {
     window.removeEventListener('online', this.#renderStatus);
     window.removeEventListener('offline', this.#renderStatus);
+    window.removeEventListener('statim:update-available', this.#onUpdateAvailable);
     this.#session?.stop();
+  }
+
+  showUpdateNotification(applyUpdate: () => void): void {
+    this.#applyUpdateFn = applyUpdate;
+    this.#updateBanner.hidden = false;
+    this.#updateIndicator.hidden = true;
+  }
+
+  #onUpdateAvailable = (e: Event) => {
+    const apply = (e as CustomEvent<() => void>).detail;
+    this.showUpdateNotification(apply);
+  };
+
+  #onApplyUpdate(): void {
+    this.#updateApply.disabled = true;
+    this.#updateApply.textContent = 'Actualizando...';
+    this.#updateIndicator.disabled = true;
+    this.#updateIndicator.textContent = 'Actualizando...';
+    this.#applyUpdateFn?.();
+  }
+
+  #onDismissUpdate(): void {
+    this.#updateBanner.hidden = true;
+    this.#updateIndicator.hidden = false;
   }
 
   async #onLogin(details: LoginDetails): Promise<void> {
