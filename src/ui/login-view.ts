@@ -3,6 +3,10 @@ import type { ConfluenceCredentials } from '../core/confluence-client.ts';
 export interface LoginDetails extends ConfluenceCredentials {
   meteredDomain?: string;
   meteredApiKey?: string;
+  proxyUrl?: string;
+  proxyUser?: string;
+  proxyPassword?: string;
+  proxyExcludedDomains?: string;
 }
 
 const template = document.createElement('template');
@@ -39,20 +43,23 @@ template.innerHTML = `
       background: var(--surface);
       color: var(--text);
     }
-    details.turn-section {
+    details.turn-section,
+    details.proxy-section {
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 0.625rem 0.75rem;
       background: var(--surface);
     }
-    details.turn-section summary {
+    details.turn-section summary,
+    details.proxy-section summary {
       cursor: pointer;
       font-size: 0.875rem;
       font-weight: 500;
       color: var(--text);
       user-select: none;
     }
-    .turn-fields {
+    .turn-fields,
+    .proxy-fields {
       display: grid;
       gap: 0.75rem;
       margin-top: 0.75rem;
@@ -108,6 +115,23 @@ template.innerHTML = `
         <p class="hint">Usará TURNS sobre TLS (puerto 443). Estos datos son sensibles y no se almacenan.</p>
       </div>
     </details>
+    <details class="proxy-section">
+      <summary>Proxy HTTP/HTTPS</summary>
+      <div class="proxy-fields">
+        <label>URL y puerto
+          <input name="proxyUrl" type="text" placeholder="http://proxy.ejemplo.com:8080" autocomplete="off" />
+        </label>
+        <label>Usuario
+          <input name="proxyUser" type="text" placeholder="Usuario" autocomplete="off" />
+        </label>
+        <label>Password
+          <input name="proxyPassword" type="password" placeholder="Password" autocomplete="current-password" />
+        </label>
+        <label>Lista de dominios excluidos
+          <input name="proxyExcludedDomains" type="text" placeholder="localhost, 127.0.0.1, .empresa.com" autocomplete="off" />
+        </label>
+      </div>
+    </details>
     <p class="hint">El token se guarda sin cifrar en este dispositivo.</p>
     <p class="error" role="alert"></p>
     <button type="submit">Entrar</button>
@@ -141,6 +165,14 @@ export class LoginView extends HTMLElement {
       const meteredApiKey = value('meteredApiKey');
       if (meteredDomain) detail.meteredDomain = meteredDomain;
       if (meteredApiKey) detail.meteredApiKey = meteredApiKey;
+      const proxyUrl = value('proxyUrl');
+      const proxyUser = value('proxyUser');
+      const proxyPassword = value('proxyPassword');
+      const proxyExcludedDomains = value('proxyExcludedDomains');
+      if (proxyUrl) detail.proxyUrl = proxyUrl;
+      if (proxyUser) detail.proxyUser = proxyUser;
+      if (proxyPassword) detail.proxyPassword = proxyPassword;
+      if (proxyExcludedDomains) detail.proxyExcludedDomains = proxyExcludedDomains;
 
       this.dispatchEvent(
         new CustomEvent<LoginDetails>('login', { detail }),
@@ -148,7 +180,7 @@ export class LoginView extends HTMLElement {
     });
   }
 
-  set values(c: Partial<ConfluenceCredentials>) {
+  set values(c: Partial<LoginDetails>) {
     for (const key of ['email', 'token', 'pageId', 'baseUrl'] as const) {
       const input = this.#form.elements.namedItem(key) as HTMLInputElement;
       input.value = c[key] ?? '';
@@ -158,6 +190,15 @@ export class LoginView extends HTMLElement {
     if (domainInput) domainInput.value = '';
     const keyInput = this.#form.elements.namedItem('meteredApiKey') as HTMLInputElement | null;
     if (keyInput) keyInput.value = '';
+    const proxyUrlInput = this.#form.elements.namedItem('proxyUrl') as HTMLInputElement | null;
+    if (proxyUrlInput) proxyUrlInput.value = c.proxyUrl ?? '';
+    const proxyUserInput = this.#form.elements.namedItem('proxyUser') as HTMLInputElement | null;
+    if (proxyUserInput) proxyUserInput.value = c.proxyUser ?? '';
+    // Sensitive proxy password is never restored or persisted
+    const proxyPasswordInput = this.#form.elements.namedItem('proxyPassword') as HTMLInputElement | null;
+    if (proxyPasswordInput) proxyPasswordInput.value = '';
+    const proxyExcludedInput = this.#form.elements.namedItem('proxyExcludedDomains') as HTMLInputElement | null;
+    if (proxyExcludedInput) proxyExcludedInput.value = c.proxyExcludedDomains ?? '';
   }
 
   set error(message: string) {

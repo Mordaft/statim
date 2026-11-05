@@ -68,6 +68,42 @@ describe('<login-view>', () => {
     expect(domainInput.value).toBe('');
     expect(keyInput.value).toBe('');
   });
+
+  it('emits proxy configuration when provided in the proxy section', () => {
+    const view = mount<LoginView>('login-view');
+    view.values = { email: 'ana@x.com', token: 'tok', pageId: '42', baseUrl: '' };
+    const urlInput = view.shadowRoot!.querySelector('input[name=proxyUrl]') as HTMLInputElement;
+    const userInput = view.shadowRoot!.querySelector('input[name=proxyUser]') as HTMLInputElement;
+    const passInput = view.shadowRoot!.querySelector('input[name=proxyPassword]') as HTMLInputElement;
+    const excludedInput = view.shadowRoot!.querySelector('input[name=proxyExcludedDomains]') as HTMLInputElement;
+    urlInput.value = ' http://proxy.corp:8080 ';
+    userInput.value = ' proxyuser ';
+    passInput.value = ' secret ';
+    excludedInput.value = ' localhost, 127.0.0.1 ';
+    const onLogin = vi.fn();
+    view.addEventListener('login', (e) => onLogin((e as CustomEvent<LoginDetails>).detail));
+
+    view.shadowRoot!.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+
+    expect(onLogin).toHaveBeenCalledWith({
+      email: 'ana@x.com',
+      token: 'tok',
+      pageId: '42',
+      baseUrl: '',
+      proxyUrl: 'http://proxy.corp:8080',
+      proxyUser: 'proxyuser',
+      proxyPassword: 'secret',
+      proxyExcludedDomains: 'localhost, 127.0.0.1',
+    });
+  });
+
+  it('never restores proxyPassword when values setter is called', () => {
+    const view = mount<LoginView>('login-view');
+    const passInput = view.shadowRoot!.querySelector('input[name=proxyPassword]') as HTMLInputElement;
+    passInput.value = 'secret';
+    view.values = { email: 'ana@x.com' };
+    expect(passInput.value).toBe('');
+  });
 });
 
 describe('<peer-avatar>', () => {
