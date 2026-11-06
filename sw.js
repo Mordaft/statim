@@ -1,11 +1,11 @@
-const CACHE = 'statim-v1793963930837';
+const CACHE = 'statim-v1793971993338';
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icons/icon.svg",
   "./assets/index-CJijM0ON.css",
-  "./assets/index-zqpRmYpe.js"
+  "./assets/index-DSeRHBMl.js"
 ];
 
 self.addEventListener('install', (event) => {
@@ -31,7 +31,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
   // Never cache Confluence API traffic.
-  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/wiki')) {
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/wiki') || url.pathname.startsWith('/rest')) {
     return;
   }
 
