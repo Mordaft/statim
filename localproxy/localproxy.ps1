@@ -14,7 +14,7 @@ param(
   [int]$Port = 8787,
 
   # Orígenes del navegador autorizados (CORS).
-  [string[]]$AllowedOrigin = @('http://localhost:5173','http://localhost:5174', 'http://localhost:4173'),
+  [string[]]$AllowedOrigin = @('http://localhost:5173','http://localhost:5174', 'http://localhost:4173', 'https://mordaft.github.io' ),
 
   # Caracteres del cuerpo mostrados en consola (0 = no mostrar).
   [int]$PreviewLength = 500

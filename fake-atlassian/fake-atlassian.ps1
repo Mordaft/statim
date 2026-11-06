@@ -61,12 +61,9 @@ function Send-Error([System.Net.HttpListenerResponse]$res, [int]$status, [string
 
 function Get-Author([System.Net.HttpListenerRequest]$req) {
   $auth = $req.Headers['Authorization']
-  if (-not $auth -or -not $auth.StartsWith('Basic ')) { return $null }
+  if (-not $auth -or -not $auth.StartsWith('Bearer ')) { return $null }
   try {
-    $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($auth.Substring(6)))
-    $sep = $decoded.IndexOf(':')
-    if ($sep -le 0) { return $null }
-    return $decoded.Substring(0, $sep).ToLowerInvariant()
+    return "Usuario"
   }
   catch { return $null }
 }
@@ -94,7 +91,7 @@ function Invoke-Route([System.Net.HttpListenerRequest]$req, [System.Net.HttpList
     if ($method -eq 'DELETE') { $comments.Clear(); Send-Json $res 204 $null; return }
   }
 
-  if (-not $author) { Send-Error $res 401 'Basic authentication required'; return }
+  if (-not $author) { Send-Error $res 401 'Oauth authentication required'; return }
 
   if ($path -eq '/wiki/api/v2/footer-comments' -and $method -eq 'POST') {
     $payload = Read-Body $req | ConvertFrom-Json
