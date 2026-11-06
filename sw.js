@@ -1,11 +1,11 @@
-const CACHE = 'statim-v1793897682525';
+const CACHE = 'statim-v1793963930837';
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icons/icon.svg",
-  "./assets/index-BqWiBM_N.js",
-  "./assets/index-CJijM0ON.css"
+  "./assets/index-CJijM0ON.css",
+  "./assets/index-zqpRmYpe.js"
 ];
 
 self.addEventListener('install', (event) => {
