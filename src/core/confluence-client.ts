@@ -64,7 +64,7 @@ export class ConfluenceClient {
   constructor(c: ConfluenceCredentials) {
     this.#base = c.baseUrl.replace(/\/+$/, '');
     this.#pageId = c.pageId;
-    this.#auth = `Basic ${toBase64(new TextEncoder().encode(`${c.email}:${c.token}`))}`;
+    this.#auth = `Bearer ${c.token}`;
     this.#limiter = new RateLimiter({
       minGapMs: config.fastPollMs,
       normalGapMs: config.idlePollMs,
