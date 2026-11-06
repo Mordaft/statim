@@ -134,8 +134,8 @@ try {
         $res.StatusCode = 204
         Write-Host '  -> 204 preflight' -ForegroundColor Green
       }
-      elseif (-not $req.Url.AbsolutePath.StartsWith('/wiki/')) {
-        Send-Text $res 404 'Solo se reenvían rutas /wiki/'
+      elseif (-not ($req.Url.AbsolutePath.StartsWith('/wiki/') -or $req.Url.AbsolutePath.StartsWith('/rest/'))) {
+        Send-Text $res 404 'Solo se reenvían rutas /wiki/ o /rest/'
         Write-Host '  -> 404 ruta no permitida' -ForegroundColor Red
       }
       else {

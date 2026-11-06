@@ -20,8 +20,10 @@ const json = (body: unknown, init: ResponseInit = {}) =>
 
 const comment = (id: number, createdAt: string, value: string) => ({
   id,
-  version: { createdAt },
-  body: { storage: { value } },
+  type: 'comment',
+  container: { id: '42', type: 'page' },
+  version: { createdAt, when: createdAt },
+  body: { storage: { value, representation: 'storage' } },
 });
 
 describe('ConfluenceClient', () => {
@@ -38,24 +40,25 @@ describe('ConfluenceClient', () => {
     const client = new ConfluenceClient(creds);
     await client.post(env);
     client.close();
-    return JSON.parse(fetchMock.mock.calls.at(-1)![1].body).body.value;
+    return JSON.parse(fetchMock.mock.calls.at(-1)![1].body).body.storage.value;
   }
 
-  it('posts an LZ4+base64 comment with Basic auth', async () => {
+  it('posts an LZ4+base64 comment with Bearer auth', async () => {
     fetchMock.mockResolvedValueOnce(json({ id: 777 }));
     const id = await new ConfluenceClient(creds).post(announce);
 
     expect(id).toBe('777');
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://proxy.local/wiki/api/v2/footer-comments');
+    expect(url).toBe('http://proxy.local/rest/api/content');
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('omit');
-    expect(init.headers.Authorization).toBe(`Basic ${btoa('Ana@x.com:tok')}`);
+    expect(init.headers.Authorization).toBe('Bearer tok');
     const body = JSON.parse(init.body);
-    expect(body.pageId).toBe('42');
-    expect(body.body.representation).toBe('storage');
-    expect(body.body.value).toMatch(/^<p>stz1:[A-Za-z0-9+/=]+<\/p>$/);
-    expect(body.body.value).not.toContain('ana@x.com');
+    expect(body.type).toBe('comment');
+    expect(body.container).toEqual({ id: '42', type: 'page' });
+    expect(body.body.storage.representation).toBe('storage');
+    expect(body.body.storage.value).toMatch(/^<p>stz1:[A-Za-z0-9+/=]+<\/p>$/);
+    expect(body.body.storage.value).not.toContain('ana@x.com');
   });
 
   it('lists entries newer than `since`, skipping foreign or corrupt comments', async () => {
@@ -76,13 +79,13 @@ describe('ConfluenceClient', () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ commentId: '5', envelope: { t: 'announce', email: 'ana@x.com' } });
-    expect(fetchMock.mock.calls.at(-1)![0]).toContain('/wiki/api/v2/pages/42/footer-comments?body-format=storage&sort=-created-date');
+    expect(fetchMock.mock.calls.at(-1)![0]).toContain('/rest/api/content/42/child/comment?expand=body.storage,version&limit=100');
   });
 
   it('follows pagination links', async () => {
     const value = await encodedValue(announce);
     fetchMock
-      .mockResolvedValueOnce(json({ results: [comment(2, '2026-11-04T10:00:02Z', value)], _links: { next: '/api/v2/pages/42/footer-comments?cursor=abc' } }))
+      .mockResolvedValueOnce(json({ results: [comment(2, '2026-11-04T10:00:02Z', value)], _links: { next: '/api/content/42/child/comment?start=100' } }))
       .mockResolvedValueOnce(json({ results: [comment(1, '2026-11-04T10:00:01Z', value)] }));
 
     const client = new ConfluenceClient({ ...creds, email: 'bob@x.com' });
@@ -91,7 +94,7 @@ describe('ConfluenceClient', () => {
     const entries = await pending;
 
     expect(entries.map((e) => e.commentId)).toEqual(['2', '1']);
-    expect(fetchMock.mock.calls.at(-1)![0]).toBe('http://proxy.local/wiki/api/v2/pages/42/footer-comments?cursor=abc');
+    expect(fetchMock.mock.calls.at(-1)![0]).toBe('http://proxy.local/rest/api/content/42/child/comment?start=100');
   });
 
   it('throws ConfluenceError and honours Retry-After', async () => {
@@ -114,7 +117,7 @@ describe('ConfluenceClient', () => {
   it('deletes comments and accepts 204', async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
     await new ConfluenceClient(creds).remove('99');
-    expect(fetchMock.mock.calls[0][0]).toBe('http://proxy.local/wiki/api/v2/footer-comments/99');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://proxy.local/rest/api/content/99');
     expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
   });
 

@@ -22,7 +22,7 @@ export async function openClient(browser: Browser, name: string, contextOptions 
 export async function join(client: Client): Promise<void> {
   const { page } = client;
   await page.getByLabel('Email de Atlassian').fill(client.email);
-  await page.getByLabel('API token').fill('fake-token');
+  await page.getByLabel('API token').fill(client.email);
   await page.getByLabel('ID de la página de Confluence').fill(PAGE_ID);
   await page.getByLabel('URL de Confluence (vacío = mismo origen)').fill(PROXY_URL);
   await page.getByRole('button', { name: 'Entrar' }).click();

@@ -30,7 +30,11 @@ export class ConfluenceError extends Error {
 }
 
 interface CommentPage {
-  results: { id: string | number; body?: { storage?: { value?: string } }; version?: { createdAt?: string } }[];
+  results: {
+    id: string | number;
+    body?: { storage?: { value?: string } };
+    version?: { createdAt?: string; when?: string };
+  }[];
   _links?: { next?: string };
 }
 
@@ -114,32 +118,59 @@ export class ConfluenceClient {
   async post(envelope: Envelope, urgent: Urgency = false): Promise<string> {
     const value = encodeBody(envelope);
     const res = await this.#request<{ id: string | number }>(
-      '/wiki/api/v2/footer-comments',
-      { method: 'POST', body: JSON.stringify({ pageId: this.#pageId, body: { representation: 'storage', value } }) },
+      '/rest/api/content',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'comment',
+          container: {
+            id: this.#pageId,
+            type: 'page',
+          },
+          body: {
+            storage: {
+              value,
+              representation: 'storage',
+            },
+          },
+        }),
+      },
       urgent,
     );
     return String(res.id);
   }
 
   async remove(commentId: string): Promise<void> {
-    await this.#request(`/wiki/api/v2/footer-comments/${encodeURIComponent(commentId)}`, { method: 'DELETE' }, false);
+    await this.#request(`/rest/api/content/${encodeURIComponent(commentId)}`, { method: 'DELETE' }, false);
   }
 
   /** Newest first, stops at the first comment created before `sinceMs`. */
   async listSince(sinceMs: number, urgent: Urgency = false): Promise<FeedEntry[]> {
     const out: FeedEntry[] = [];
-    let path = `/wiki/api/v2/pages/${encodeURIComponent(this.#pageId)}/footer-comments?body-format=storage&sort=-created-date&limit=100`;
+    let path = `/rest/api/content/${encodeURIComponent(this.#pageId)}/child/comment?expand=body.storage,version&limit=100`;
 
     while (path) {
       const page = await this.#request<CommentPage>(path, {}, urgent);
       for (const c of page.results) {
-        const createdAt = Date.parse(c.version?.createdAt ?? '');
+        const createdAt = Date.parse(c.version?.when ?? c.version?.createdAt ?? '');
         if (!(createdAt >= sinceMs)) return out;
         const envelope = decodeBody(c.body?.storage?.value);
         if (envelope) out.push({ commentId: String(c.id), createdAt, envelope });
       }
       const next = page._links?.next ?? '';
-      path = next.startsWith('/api/') ? `/wiki${next}` : next;
+      if (!next) {
+        path = '';
+      } else if (next.startsWith('http://') || next.startsWith('https://')) {
+        const u = new URL(next);
+        path = u.pathname + u.search;
+      } else if (next.startsWith('/api/')) {
+        path = `/rest${next}`;
+      } else {
+        path = next;
+      }
+      if (this.#base.endsWith('/wiki') && path.startsWith('/wiki/')) {
+        path = path.slice(5);
+      }
     }
     return out;
   }

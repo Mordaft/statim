@@ -69,6 +69,17 @@ export default defineConfig(({ mode }) => {
                 });
               },
             },
+            '/rest': {
+              target,
+              changeOrigin: true,
+              secure: true,
+              configure: (proxy) => {
+                proxy.on('proxyReq', (req) => {
+                  req.removeHeader('origin');
+                  req.removeHeader('referer');
+                });
+              },
+            },
           }
         : undefined,
     },

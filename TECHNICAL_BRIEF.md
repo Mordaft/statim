@@ -41,7 +41,7 @@ flowchart LR
     RA --> DBA
   end
   CA -- "HTTPS (stz1: base64 LZ4 JSON)" --> P[localproxy / proxy CORS]
-  P --> C[(Confluence<br/>footer-comments v2)]
+  P --> C[(Confluence<br/>REST API v1 content)]
   MA <-- "WebRTC DataChannel<br/>DTLS + AES-GCM(LZ4)" --> MB[Mesh B]
   MA -. TURNS (TLS 443) .- T[Metered subdomain.metered.live / coturn]
 ```
@@ -87,7 +87,7 @@ src/
     wire.ts                Frame binario del DataChannel, validación UUID
     protocol.ts            Sobres de Confluence y su validación
     rate-limiter.ts        Cola única + espaciado + presupuesto diario
-    confluence-client.ts   REST v2 footer-comments (vía RateLimiter)
+    confluence-client.ts   REST API v1 content / comments (vía RateLimiter)
     pwa-update.ts          Ciclo de vida y detección de actualizaciones de la PWA
     public-ip.ts           IP pública vía candidato STUN srflx
     registry.ts            Anuncios, rotación, sondeo, señalización agrupada
@@ -149,10 +149,10 @@ Valores por defecto (producción). Los tiempos marcados con *t()* se multiplican
 - `penalize(ms)` bloquea la cola (se usa con `Retry-After`). `close()` rechaza lo pendiente.
 
 ### `ConfluenceClient` ([confluence-client.ts](src/core/confluence-client.ts))
-- Autenticación `Basic base64(email:token)` y `credentials: 'omit'`.
-- `post(envelope, urgent)` → `POST /wiki/api/v2/footer-comments` con `{ pageId, body: { representation: 'storage', value } }`.
-- `listSince(sinceMs, urgent)` → `GET /wiki/api/v2/pages/{id}/footer-comments?body-format=storage&sort=-created-date&limit=100`. Recorre `_links.next` y se detiene en el primer comentario anterior a `since`.
-- `remove(id)` → `DELETE /wiki/api/v2/footer-comments/{id}`.
+- Autenticación `Bearer <token>` (o PAT) y `credentials: 'omit'`.
+- `post(envelope, urgent)` → `POST /rest/api/content` con `{ type: 'comment', container: { id: pageId, type: 'page' }, body: { storage: { value, representation: 'storage' } } }`.
+- `listSince(sinceMs, urgent)` → `GET /rest/api/content/{id}/child/comment?expand=body.storage,version&limit=100`. Recorre `_links.next` y se detiene en el primer comentario anterior a `since`.
+- `remove(id)` → `DELETE /rest/api/content/{id}`.
 - Los errores se lanzan como `ConfluenceError { status, retryAfterMs }`.
 
 ### `Registry` ([registry.ts](src/core/registry.ts))
@@ -463,9 +463,9 @@ Primera vez con Playwright: `pnpm exec playwright install chromium`.
 | [fake-atlassian](fake-atlassian/fake-atlassian.ps1) | `pwsh fake-atlassian/fake-atlassian.ps1 [-Port 8790]`, directo o detrás de localproxy | Varios clientes en local sin Atlassian |
 
 **fake-atlassian:**
-- Endpoints: `POST /wiki/api/v2/footer-comments`, `GET /wiki/api/v2/pages/{id}/footer-comments` (con `sort`, `limit` ≤ 250, `cursor` y `_links.next`) y `DELETE /wiki/api/v2/footer-comments/{id}` (solo el autor; si no, 403).
+- Endpoints: `POST /rest/api/content`, `GET /rest/api/content/{id}/child/comment` (con `expand`, `limit` ≤ 250, `start` y `_links.next`) y `DELETE /rest/api/content/{id}` (solo el autor; si no, 403). Mantiene compatibilidad con `/wiki/api/v2/`.
 - Administración: `GET|DELETE /__admin/comments`.
-- Acepta cualquier usuario y token.
+- Acepta cualquier Bearer token o Basic auth.
 
 **Varios clientes en una máquina:** usa perfiles de navegador distintos (normal, incógnito u otro navegador). Comparten origen, pero no IndexedDB ni `localStorage`. Si agotas el presupuesto diario probando, borra `statim.fastBudget.<email>`.
 
@@ -528,7 +528,7 @@ Escenarios de [chat.spec.ts](test-e2e/chat.spec.ts), en serie con 3 contextos in
 
 ## 16. Limitaciones y trabajo pendiente
 
-- **No validado aún contra Confluence Cloud real:** el parámetro `sort=-created-date` en `footer-comments` y el formato exacto de `_links.next` (se contemplan `/wiki/api/…` y `/api/…`).
+- **No validado aún contra Confluence Cloud/Server real:** el formato exacto de `_links.next` (se contemplan `/rest/api/…` y `/api/…`).
 - Producción sin proxy: Atlassian Cloud no permite CORS desde orígenes arbitrarios. Hace falta un reenviador o servir la app desde un origen permitido.
 - Iconos PNG (180/512) para instalación óptima en iOS.
 - Verificación del autor de los anuncios (§11).

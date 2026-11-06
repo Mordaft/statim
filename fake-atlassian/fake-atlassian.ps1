@@ -1,16 +1,17 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Mock en memoria de la API de comentarios de Confluence Cloud (v2) para probar varios clientes Statim en local.
+  Mock en memoria de la API de comentarios de Confluence Cloud / Server (REST API v1) para probar varios clientes Statim en local.
 .DESCRIPTION
   Endpoints simulados:
-    POST   /wiki/api/v2/footer-comments
-    GET    /wiki/api/v2/pages/{pageId}/footer-comments?body-format=storage&sort=-created-date&limit=N&cursor=C
-    DELETE /wiki/api/v2/footer-comments/{commentId}
+    POST   /rest/api/content
+    GET    /rest/api/content/{pageId}/child/comment?expand=body.storage,version&limit=N&start=C
+    DELETE /rest/api/content/{commentId}
+  (Mantiene también compatibilidad con /wiki/api/v2/footer-comments).
   Administración:
     GET    /__admin/comments   lista todo lo almacenado
     DELETE /__admin/comments   vacía la memoria
-  Acepta cualquier email/token en Basic auth; el email se usa como autor del comentario.
+  Acepta Bearer token o Basic auth; el token/email se usa como autor del comentario.
 .EXAMPLE
   pwsh fake-atlassian.ps1
   pwsh fake-atlassian.ps1 -Port 8790 -AllowedOrigin http://localhost:5173
@@ -61,19 +62,45 @@ function Send-Error([System.Net.HttpListenerResponse]$res, [int]$status, [string
 
 function Get-Author([System.Net.HttpListenerRequest]$req) {
   $auth = $req.Headers['Authorization']
-  if (-not $auth -or -not $auth.StartsWith('Bearer ')) { return $null }
-  try {
-    return "Usuario"
+  if (-not $auth) { return $null }
+
+  if ($auth -match '^Bearer\s+(.+)$') {
+    $token = $Matches[1].Trim()
+    if (-not $token) { return $null }
+    try {
+      $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($token))
+      $sep = $decoded.IndexOf(':')
+      if ($sep -gt 0) { return $decoded.Substring(0, $sep).ToLowerInvariant() }
+    } catch { }
+    return $token.ToLowerInvariant()
   }
-  catch { return $null }
+
+  if ($auth -match '^Basic\s+(.+)$') {
+    try {
+      $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Matches[1].Trim()))
+      $sep = $decoded.IndexOf(':')
+      if ($sep -gt 0) { return $decoded.Substring(0, $sep).ToLowerInvariant() }
+    } catch { }
+  }
+
+  return $null
 }
 
 function ConvertTo-CommentDto($c) {
   [ordered]@{
-    id      = "$($c.id)"
-    pageId  = $c.pageId
-    version = @{ number = 1; createdAt = $c.createdAt; authorId = $c.author }
-    body    = @{ storage = @{ representation = 'storage'; value = $c.value } }
+    id        = "$($c.id)"
+    type      = 'comment'
+    status    = 'current'
+    pageId    = $c.pageId
+    container = @{ id = $c.pageId; type = 'page' }
+    version   = @{
+      number    = 1
+      when      = $c.createdAt
+      createdAt = $c.createdAt
+      authorId  = $c.author
+      by        = @{ username = $c.author; displayName = $c.author; publicName = $c.author }
+    }
+    body      = @{ storage = @{ representation = 'storage'; value = $c.value } }
   }
 }
 
@@ -91,17 +118,18 @@ function Invoke-Route([System.Net.HttpListenerRequest]$req, [System.Net.HttpList
     if ($method -eq 'DELETE') { $comments.Clear(); Send-Json $res 204 $null; return }
   }
 
-  if (-not $author) { Send-Error $res 401 'Oauth authentication required'; return }
+  if (-not $author) { Send-Error $res 401 'Bearer authentication required'; return }
 
-  if ($path -eq '/wiki/api/v2/footer-comments' -and $method -eq 'POST') {
+  if (($path -eq '/rest/api/content' -or $path -eq '/wiki/api/v2/footer-comments') -and $method -eq 'POST') {
     $payload = Read-Body $req | ConvertFrom-Json
-    $value = $payload.body.value
-    if (-not $payload.pageId -or -not $value) { Send-Error $res 400 'pageId and body.value are required'; return }
+    $pageId = if ($payload.container -and $payload.container.id) { "$($payload.container.id)" } else { "$($payload.pageId)" }
+    $value = if ($payload.body.storage -and $payload.body.storage.value) { $payload.body.storage.value } else { $payload.body.value }
+    if (-not $pageId -or -not $value) { Send-Error $res 400 'container.id and body.storage.value are required'; return }
 
     $script:nextId++
     $comment = [pscustomobject]@{
       id        = $script:nextId
-      pageId    = "$($payload.pageId)"
+      pageId    = "$pageId"
       author    = $author
       value     = "$value"
       createdAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
@@ -112,7 +140,7 @@ function Invoke-Route([System.Net.HttpListenerRequest]$req, [System.Net.HttpList
     return
   }
 
-  if ($path -match '^/wiki/api/v2/footer-comments/(\d+)$' -and $method -eq 'DELETE') {
+  if (($path -match '^/rest/api/content/(\d+)$' -or $path -match '^/wiki/api/v2/footer-comments/(\d+)$') -and $method -eq 'DELETE') {
     $id = [int]$Matches[1]
     $comment = $comments | Where-Object id -eq $id | Select-Object -First 1
     if (-not $comment) { Send-Error $res 404 'Comment not found'; return }
@@ -122,22 +150,34 @@ function Invoke-Route([System.Net.HttpListenerRequest]$req, [System.Net.HttpList
     return
   }
 
-  if ($path -match '^/wiki/api/v2/pages/([^/]+)/footer-comments$' -and $method -eq 'GET') {
+  if (($path -match '^/rest/api/content/([^/]+)/child/comment$' -or $path -match '^/wiki/api/v2/pages/([^/]+)/footer-comments$') -and $method -eq 'GET') {
     $pageId = [Uri]::UnescapeDataString($Matches[1])
     $rawLimit = if ($req.QueryString['limit']) { [int]$req.QueryString['limit'] } else { 25 }
     $limit = [Math]::Min([Math]::Max($rawLimit, 1), 250)
-    $rawCursor = if ($req.QueryString['cursor']) { [int]$req.QueryString['cursor'] } else { 0 }
+    $rawCursor = if ($req.QueryString['start']) { [int]$req.QueryString['start'] } elseif ($req.QueryString['cursor']) { [int]$req.QueryString['cursor'] } else { 0 }
     $offset = [Math]::Max(0, $rawCursor)
-    $sort = if ($req.QueryString['sort']) { $req.QueryString['sort'] } else { 'created-date' }
+    $sort = if ($req.QueryString['sort']) { $req.QueryString['sort'] } else { '-created-date' }
 
-    $all = @($comments | Where-Object pageId -eq $pageId | Sort-Object id -Descending:($sort -eq '-created-date'))
+    $all = @($comments | Where-Object pageId -eq $pageId | Sort-Object id -Descending:($sort -ne 'created-date'))
     $page = @($all | Select-Object -Skip $offset -First $limit)
     $links = @{}
     if ($offset + $limit -lt $all.Count) {
-      $qs = "body-format=storage&sort=$([Uri]::EscapeDataString($sort))&limit=$limit&cursor=$($offset + $limit)"
-      $links.next = "/wiki/api/v2/pages/$([Uri]::EscapeDataString($pageId))/footer-comments?$qs"
+      if ($path.StartsWith('/rest/api')) {
+        $expand = if ($req.QueryString['expand']) { [Uri]::EscapeDataString($req.QueryString['expand']) } else { 'body.storage,version' }
+        $qs = "expand=$expand&limit=$limit&start=$($offset + $limit)"
+        $links.next = "/rest/api/content/$([Uri]::EscapeDataString($pageId))/child/comment?$qs"
+      } else {
+        $qs = "body-format=storage&sort=$([Uri]::EscapeDataString($sort))&limit=$limit&cursor=$($offset + $limit)"
+        $links.next = "/wiki/api/v2/pages/$([Uri]::EscapeDataString($pageId))/footer-comments?$qs"
+      }
     }
-    Send-Json $res 200 @{ results = @($page | ForEach-Object { ConvertTo-CommentDto $_ }); _links = $links }
+    Send-Json $res 200 @{
+      results = @($page | ForEach-Object { ConvertTo-CommentDto $_ })
+      start   = $offset
+      limit   = $limit
+      size    = $page.Count
+      _links  = $links
+    }
     return
   }
 

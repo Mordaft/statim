@@ -24,7 +24,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
   // Never cache Confluence API traffic.
-  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/wiki')) {
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/wiki') || url.pathname.startsWith('/rest')) {
     return;
   }
 
