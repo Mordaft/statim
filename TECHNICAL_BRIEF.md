@@ -75,7 +75,10 @@ index.html                 Shell HTML (<statim-app>)
 public/
   manifest.webmanifest     PWA
   sw.js                    Service Worker (cache del shell; nunca /wiki)
-  icons/icon.svg
+  icons/
+    icon.svg               Icono PWA 512×512 maskable (Mineral Slate)
+    statim-logo-emblem.svg Emblema candado + rayo dual-gradient (2027)
+    statim-logo-full.svg   Logotipo horizontal completo (emblema + wordmark)
 src/
   main.ts                  Entrada; registra el SW solo en producción
   config.ts                Parámetros del protocolo y variables de entorno
@@ -374,9 +377,44 @@ La versión 2 elimina `processedSignals` y `ownComments`, cuyo seguimiento ya no
 
 ---
 
-## 9. Interfaz
+## 9. Interfaz y Design System (STATIM 2027)
 
-Web Components con Shadow DOM, sin framework. Los estilos usan las variables CSS de [styles.css](src/styles.css), que atraviesan el Shadow DOM, e incluyen tema claro/oscuro y márgenes de *safe area*.
+Web Components con Shadow DOM, sin framework ni librerías externas de UI. Los estilos se rigen por el **Design System STATIM 2027** y usan las variables CSS de [styles.css](src/styles.css), que atraviesan el Shadow DOM, e incluyen tema claro/oscuro y márgenes de *safe area*.
+
+### 9.1 Sistema de Diseño (Digital Style Guide — STATIM 2027)
+
+Statim implementa el sistema de diseño digital corporativo **STATIM 2027**, optimizado para dispositivos móviles con pantallas OLED/AMOLED de alta densidad, contraste accesible según WCAG 2.1 AA/AAA y una jerarquía cromática y semántica estricta.
+
+#### Paleta Cromática y Tokens Digitales (`src/styles.css`)
+
+| Rol | Token CSS | Hex | Aplicación y Semántica |
+|---|---|---|---|
+| **Primario (Oscuro)** | `--mineral-slate` | `#1C222B` | Superficie base en modo oscuro, tarjetas de inicio de sesión, cabecera de la app y fondo de burbujas recibidas. |
+| **Primario (Claro)** | `--pure-alabaster` | `#F7F7F5` | Fondo suave en modo claro y color del texto principal en superficies oscuras. |
+| **Secundario (Acento)** | `--luminous-blue` | `#3B82F6` | Color de acento primario (`--accent`), fondo de burbujas de mensajes propios, anillos de foco interactivo y botones de acción principal. |
+| **Secundario (Resaltado)** | `--soft-lavender` | `#C4B5FD` | Nombres de autor en mensajes recibidos (modo oscuro) y acento lateral/fondo de citas y respuestas (`> autor: ...`). En modo claro usa `#6D28D9` para garantizar contraste. |
+| **Secundario (Presencia)** | `--celery-mist` | `#A8B899` | Halo e indicador de compañero en línea en avatares (`peer-avatar[online]`) y confirmación de entrega en la malla (`✓✓`). |
+| **Acento CTA** | `--energy-orange` | `#FF5A1F` | Botones de alta energía y llamada a la acción (`--accent-cta`): banners de instalación y actualización de la PWA. |
+| **Acento Estado** | `--topaz-volt` | `#F4A261` | Indicador de búsqueda de compañeros de malla (animación de pulso) y estado de entrega local pendiente (`🕒`). |
+| **Bordes y Divisores** | `--silver-chrome` | `#CBD5E1` | Bordes de inputs, divisores sutiles y contornos en modo claro (`#2D3748` en modo oscuro). |
+
+#### Tipografía Corporativa
+
+- **Fuente Principal (UI):** `Aeo Grotesque Sans` (`--font-sans: 'Aeo Grotesque Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`). Tipografía neo-grotesca limpia, moderna y con excelente legibilidad en pantallas táctiles densas.
+- **Fuente Monospace:** `Tech Mono UI` (`--font-mono: 'Tech Mono UI', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`). Utilizada en bloques de código, trazas del visor de diagnóstico y representaciones técnicas.
+
+#### Identidad de Marca e Iconografía Dual-Gradient
+
+- **Isotipo Candado + Rayo S-Slash:**
+  - **Cuerpo y arco del candado:** Degradado vectorial que evoluciona desde Cyan Eléctrico (`#00DAF3`) y Luminous Blue (`#3B82F6`) hacia tonos profundos Mineral Slate (`#1C222B`).
+  - **Rayo central (S-slash):** Simboliza la inmediatez y velocidad de la malla P2P. Nace en tonos Cyan/Azul y culmina en su punta inferior con un destello en **Topaz Volt** (`#F4A261`) y **Energy Orange** (`#FF5A1F`).
+- **Recursos Vectoriales ([public/icons/](public/icons/)):**
+  - `statim-logo-emblem.svg`: Emblema aislado con aura de brillo cian/azul y filtro de elevación.
+  - `statim-logo-full.svg`: Composición horizontal completa (isotipo + wordmark tipográfico corporativo "STATIM").
+  - `icon.svg`: Icono PWA (512×512) con fondo Mineral Slate `#1C222B`, radio adaptativo y márgenes de seguridad para renderizado *maskable*.
+  - Inline en componentes: Versiones compactas con IDs de gradiente únicos en `<statim-app>` y `<login-view>`.
+
+### 9.2 Componentes Web
 
 | Componente | API |
 |---|---|
@@ -384,26 +422,29 @@ Web Components con Shadow DOM, sin framework. Los estilos usan las variables CSS
 | `<login-view>` | Setters `values`, `error`, `busy`. Evento `login` (`CustomEvent<LoginDetails>`). Secciones para TURN/TLS, proxy y visor/exportador de logs de diagnóstico. Touch targets táctiles optimizados para móvil (≥ 52 px en inputs y botones). |
 | `<chat-room>` | `attach(session)` / `detach()`. Muestra los últimos 200 mensajes. Enter envía, Shift+Enter hace salto de línea. Repintado sin saltos (ver abajo). |
 | `<peer-list>` | `attach(session)` / `detach()`. Evento `count` con el número de conectados. |
-| `<peer-avatar email="…" online>` | Identicon cacheado. |
+| `<peer-avatar email="…" online>` | Identicon cacheado con indicador de presencia en Celery Mist. |
+
+### 9.3 Experiencia Mobile-First y Ergonomía Táctil
 
 - **Mobile-first & Ergonomía táctil:**
   - Lista de equipo como panel inferior deslizante (mobile bottom sheet) con tirador y fondo desenfocado; a partir de 900 px pasa a columna fija.
   - Viewport dinámico sincronizado con `visualViewport` y `<meta name="viewport" content="... interactive-widget=resizes-content" />` para evitar que el teclado virtual tape los mensajes o el campo de entrada.
   - Agrupación visual de mensajes consecutivos del mismo autor (≤ 3 min), ocultando avatares y cabeceras repetidas para optimizar el espacio vertical.
+  - Burbujas asimétricas con jerarquía visual: mensajes propios en Luminous Blue elevado con texto blanco; mensajes recibidos en superficie Mineral Slate con nombres de autor en Soft Lavender.
+  - Citas y respuestas formateadas (`> autor: ...`) con barra lateral izquierda en Soft Lavender y fondo translúcido.
   - Pastilla flotante de fecha adhesiva (`.sticky-date`) que informa del día visible mientras se navega por el historial.
   - Menú contextual táctil en mensajes mediante pulsación larga (400 ms con vibración háptica de 15 ms) y clic derecho en escritorio: copiar texto, citar/responder en el input, ver detalles de entrega y reaccionar con emojis rápidos.
   - Barra de emojis rápidos desplegable sobre el input (`.emoji-bar`) con botón alternador `😊` y vibración táctil al pulsar.
-  - Indicadores de entrega P2P: reloj `🕒` (guardado local pendiente de pares) y doble check `✓✓` (transmitido a la malla WebRTC).
+  - Indicadores de entrega P2P: reloj `🕒` en Topaz Volt (guardado local pendiente de pares) y doble check `✓✓` en Celery Mist (transmitido a la malla WebRTC).
   - Deslizamiento hacia abajo (*pull-to-refresh*) para comprobar señales de Confluence bajo demanda.
   - Pastilla interactiva de estado en la cabecera que abre una hoja modal (`.net-sheet`) con estadísticas de la malla WebRTC, presupuesto de peticiones de Confluence y comprobación inmediata.
-  - Soporte multi-idioma nativo y tipado (`src/core/i18n.ts`) con selector ES/EN persistente.
-  - Identidad visual renovada: monograma P2P 'S' vectorial (`concept-2-monogram.svg`) y concepto de escudo de privacidad (`concept-3-shield.svg`), adaptados a zona segura de iconos maskable.
+  - Cabecera *glassmorphic* sobre Mineral Slate con botones táctiles translúcidos y selector de idioma ES/EN persistente (`src/core/i18n.ts`).
 - **Layout:** la altura se reparte con grids `minmax(0, 1fr)` hasta la `<ol>`, que es la única zona con scroll. No pongas `display` en `statim-app` desde [styles.css](src/styles.css): los estilos del documento ganan a `:host` y romperían el grid, y el cuadro de texto acabaría fuera de pantalla.
 - **Repintado sin saltos (`<chat-room>`):**
   - Cada lote se inserta en una sola pasada, en orden de `ts`, con un cursor que recorre la lista desde el final (O(n+m)). Los `msgId` ya pintados se ignoran.
   - Si el lector estaba al final (< 80 px), se queda al final.
-  - Si no, se guarda el primer mensaje visible y su desplazamiento, y se restaura tras insertar. Así, el historial que llega por encima no mueve lo que se est\u00e1 leyendo. El anclaje es manual (`overflow-anchor: none`) porque Safari iOS no tiene anclaje nativo.
-  - Los mensajes nuevos que quedan por debajo se cuentan en el aviso "N mensajes nuevos \u2193". Se oculta al llegar al final.
+  - Si no, se guarda el primer mensaje visible y su desplazamiento, y se restaura tras insertar. Así, el historial que llega por encima no mueve lo que se está leyendo. El anclaje es manual (`overflow-anchor: none`) porque Safari iOS no tiene anclaje nativo.
+  - Los mensajes nuevos que quedan por debajo se cuentan en el aviso "N mensajes nuevos ↓". Se oculta al llegar al final.
   - Los mensajes que llegan aparecen con un *fade-in* de 240 ms (solo opacidad, sin cambios de layout), desactivado con `prefers-reduced-motion`.
 - **Seguridad:** todo texto externo se pinta con `textContent`. Nunca uses `innerHTML` con datos de pares o de Confluence; hay un test que lo vigila.
 
