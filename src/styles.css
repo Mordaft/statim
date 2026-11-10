@@ -1,27 +1,60 @@
 :root {
-  --bg: #ffffff;
-  --surface: #f3f5f8;
-  --text: #1b1f24;
-  --muted: #5b6573;
-  --accent: #1f6feb;
+  /* STATIM 2027 BRAND PALETTE */
+  /* Colores Primarios */
+  --mineral-slate: #1c222b;
+  --pure-alabaster: #f7f7f5;
+
+  /* Colores Secundarios */
+  --luminous-blue: #3b82f6;
+  --soft-lavender: #c4b5fd;
+  --celery-mist: #a8b899;
+
+  /* Acentos */
+  --energy-orange: #ff5a1f;
+  --topaz-volt: #f4a261;
+  --silver-chrome: #cbd5e1;
+
+  /* Tipografía */
+  --font-sans: 'Aeo Grotesque Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Tech Mono UI', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+
+  /* Light Theme Tokens */
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --text: #1c222b;
+  --muted: #64748b;
+  --author-accent: #6d28d9;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
   --accent-text: #ffffff;
-  --border: #d8dee4;
+  --accent-cta: #ff5a1f;
+  --accent-cta-hover: #ea4a10;
+  --border: #cbd5e1;
   --radius: 12px;
   --gap: 0.75rem;
   --header-h: 3.5rem;
   color-scheme: light dark;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --text: #e6edf3;
-    --muted: #8b949e;
-    --border: #30363d;
+    /* Dark Theme Tokens (Mineral Slate foundation) */
+    --bg: #12171e;
+    --surface: #1c222b;
+    --surface-raised: #232b36;
+    --text: #f7f7f5;
+    --muted: #94a3b8;
+    --author-accent: #c4b5fd;
+    --border: #2d3748;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-text: #ffffff;
+    --accent-cta: #ff5a1f;
+    --accent-cta-hover: #ff7442;
   }
 }
 
@@ -37,6 +70,7 @@ body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
+  font-family: var(--font-sans);
   overscroll-behavior: none;
 }
 

@@ -29,8 +29,9 @@ template.innerHTML = `
       gap: 0.5rem;
       min-height: var(--header-h);
       padding: 0 0.5rem 0 1rem;
-      background: var(--accent);
-      color: var(--accent-text);
+      background: var(--mineral-slate, #1c222b);
+      color: var(--pure-alabaster, #f7f7f5);
+      border-bottom: 1px solid var(--border);
       z-index: 110;
     }
     .brand {
@@ -73,25 +74,25 @@ template.innerHTML = `
       touch-action: manipulation;
     }
     .status:hover {
-      background: rgb(255 255 255 / 0.12);
-      border-color: rgb(255 255 255 / 0.25);
+      background: rgb(255 255 255 / 0.1);
+      border-color: rgb(255 255 255 / 0.2);
     }
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: #e3b341;
+      background: var(--topaz-volt, #f4a261);
       flex-shrink: 0;
       transition: background-color 0.2s ease;
     }
     .status-dot.online {
-      background: #3fb950;
+      background: #10b981;
     }
     .status-dot.offline {
       background: #f85149;
     }
     .status-dot.searching {
-      background: #e3b341;
+      background: var(--topaz-volt, #f4a261);
       animation: pulse 1.6s infinite ease-in-out;
     }
     @keyframes pulse {
@@ -109,15 +110,20 @@ template.innerHTML = `
       font-weight: 500;
       min-height: 2.375rem;
       padding: 0 0.75rem;
-      border: 1px solid rgb(255 255 255 / 0.4);
+      border: 1px solid rgb(255 255 255 / 0.22);
       border-radius: var(--radius);
-      background: transparent;
-      color: inherit;
+      background: rgba(255 255 255 / 0.06);
+      color: var(--pure-alabaster, #f7f7f5);
       cursor: pointer;
       touch-action: manipulation;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    header button:not(.status):hover {
+      background: rgba(255 255 255 / 0.12);
+      border-color: rgb(255 255 255 / 0.35);
     }
     header button:not(.status):active {
-      background: rgb(255 255 255 / 0.15);
+      background: rgba(255 255 255 / 0.18);
     }
     .lang-btn {
       font-weight: 600;
@@ -156,9 +162,14 @@ template.innerHTML = `
       padding: 0 0.75rem;
       border: none;
       border-radius: var(--radius);
-      background: var(--accent);
-      color: var(--accent-text);
+      background: var(--accent-cta, #ff5a1f);
+      color: #ffffff;
       cursor: pointer;
+      box-shadow: 0 2px 6px rgb(255 90 31 / 0.3);
+      transition: opacity 0.15s ease, background 0.15s ease;
+    }
+    .update-apply:hover:not(:disabled) {
+      background: var(--accent-cta-hover, #ea4a10);
     }
     .update-apply:disabled {
       opacity: 0.7;
@@ -254,11 +265,16 @@ template.innerHTML = `
       min-height: 2rem;
       border: 0;
       border-radius: var(--radius);
-      background: var(--accent);
-      color: var(--accent-text);
+      background: var(--accent-cta, #ff5a1f);
+      color: #ffffff;
       cursor: pointer;
       touch-action: manipulation;
       white-space: nowrap;
+      box-shadow: 0 2px 6px rgb(255 90 31 / 0.3);
+      transition: background 0.15s ease;
+    }
+    .install-btn:hover {
+      background: var(--accent-cta-hover, #ea4a10);
     }
     .install-dismiss {
       background: transparent;
@@ -475,13 +491,20 @@ template.innerHTML = `
         <defs>
           <linearGradient id="header-logo-grad" x1="90%" y1="0%" x2="10%" y2="100%">
             <stop offset="0%" stop-color="#00daf3"/>
-            <stop offset="35%" stop-color="#79c0ff"/>
+            <stop offset="35%" stop-color="#3b82f6"/>
             <stop offset="70%" stop-color="#ffffff"/>
-            <stop offset="100%" stop-color="#e6edf3"/>
+            <stop offset="100%" stop-color="#cbd5e1"/>
+          </linearGradient>
+          <linearGradient id="header-bolt-grad" x1="85%" y1="5%" x2="15%" y2="95%">
+            <stop offset="0%" stop-color="#00daf3"/>
+            <stop offset="38%" stop-color="#3b82f6"/>
+            <stop offset="68%" stop-color="#f4a261"/>
+            <stop offset="100%" stop-color="#ff5a1f"/>
           </linearGradient>
         </defs>
         <path fill="url(#header-logo-grad)" fill-rule="evenodd" d="M 164 202 L 164 160 A 92 92 0 0 1 348 160 L 348 202 L 376 202 L 376 226 C 368 214 354 204 338 202 L 312 202 L 312 160 A 56 56 0 0 0 200 160 L 200 202 L 174 202 C 158 204 144 214 136 226 L 136 202 Z"/>
-        <path fill="url(#header-logo-grad)" fill-rule="evenodd" d="M 256 198 A 120 120 0 1 1 255.9 198 Z M 259 238 A 80 80 0 0 0 230 394 L 256 346 L 200 346 Z M 293 247 L 254 318 L 312 318 L 268 397 A 80 80 0 0 0 293 247 Z"/>
+        <path fill="url(#header-logo-grad)" fill-rule="evenodd" d="M 256 198 A 120 120 0 1 1 255.9 198 Z M 256 238 A 80 80 0 1 0 256.1 238 Z"/>
+        <path fill="url(#header-bolt-grad)" d="M 259 238 A 80 80 0 0 1 293 247 L 254 318 L 312 318 L 268 397 A 80 80 0 0 1 230 394 L 256 346 L 200 346 Z"/>
       </svg>
       <h1>Statim</h1>
     </div>
@@ -508,13 +531,20 @@ template.innerHTML = `
           <defs>
             <linearGradient id="install-logo-grad" x1="90%" y1="0%" x2="10%" y2="100%">
               <stop offset="0%" stop-color="#00daf3"/>
-              <stop offset="30%" stop-color="#00b4d8"/>
-              <stop offset="70%" stop-color="#026cb6"/>
-              <stop offset="100%" stop-color="#08183a"/>
+              <stop offset="35%" stop-color="#3b82f6"/>
+              <stop offset="70%" stop-color="#ffffff"/>
+              <stop offset="100%" stop-color="#cbd5e1"/>
+            </linearGradient>
+            <linearGradient id="install-bolt-grad" x1="85%" y1="5%" x2="15%" y2="95%">
+              <stop offset="0%" stop-color="#00daf3"/>
+              <stop offset="38%" stop-color="#3b82f6"/>
+              <stop offset="68%" stop-color="#f4a261"/>
+              <stop offset="100%" stop-color="#ff5a1f"/>
             </linearGradient>
           </defs>
           <path fill="url(#install-logo-grad)" fill-rule="evenodd" d="M 164 202 L 164 160 A 92 92 0 0 1 348 160 L 348 202 L 376 202 L 376 226 C 368 214 354 204 338 202 L 312 202 L 312 160 A 56 56 0 0 0 200 160 L 200 202 L 174 202 C 158 204 144 214 136 226 L 136 202 Z"/>
-          <path fill="url(#install-logo-grad)" fill-rule="evenodd" d="M 256 198 A 120 120 0 1 1 255.9 198 Z M 259 238 A 80 80 0 0 0 230 394 L 256 346 L 200 346 Z M 293 247 L 254 318 L 312 318 L 268 397 A 80 80 0 0 0 293 247 Z"/>
+          <path fill="url(#install-logo-grad)" fill-rule="evenodd" d="M 256 198 A 120 120 0 1 1 255.9 198 Z M 256 238 A 80 80 0 1 0 256.1 238 Z"/>
+          <path fill="url(#install-bolt-grad)" d="M 259 238 A 80 80 0 0 1 293 247 L 254 318 L 312 318 L 268 397 A 80 80 0 0 1 230 394 L 256 346 L 200 346 Z"/>
         </svg>
       </span>
       <div class="install-info">

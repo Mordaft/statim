@@ -1,17 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    
-    <!-- Brand Cyan-to-Deep-Navy Gradient from original artwork -->
-    <linearGradient id="statim-gradient" x1="90%" y1="0%" x2="10%" y2="100%">
+    <linearGradient id="padlock-grad" x1="90%" y1="0%" x2="10%" y2="100%">
       <stop offset="0%" stop-color="#00daf3"/>
-      <stop offset="22%" stop-color="#00b4d8"/>
-      <stop offset="55%" stop-color="#026cb6"/>
-      <stop offset="82%" stop-color="#09285b"/>
-      <stop offset="100%" stop-color="#07193b"/>
+      <stop offset="28%" stop-color="#3b82f6"/>
+      <stop offset="70%" stop-color="#0d244c"/>
+      <stop offset="100%" stop-color="#1c222b"/>
     </linearGradient>
+    <linearGradient id="bolt-grad" x1="85%" y1="5%" x2="15%" y2="95%">
+      <stop offset="0%" stop-color="#00daf3"/>
+      <stop offset="35%" stop-color="#3b82f6"/>
+      <stop offset="68%" stop-color="#f4a261"/>
+      <stop offset="100%" stop-color="#ff5a1f"/>
+    </linearGradient>
+    <radialGradient id="bg-slate" cx="50%" cy="35%" r="75%">
+      <stop offset="0%" stop-color="#232b36"/>
+      <stop offset="60%" stop-color="#1c222b"/>
+      <stop offset="100%" stop-color="#12171e"/>
+    </radialGradient>
+    <filter id="icon-shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
   </defs>
-  <g fill="url(#statim-gradient)">
-    <path fill-rule="evenodd" d="
+
+  
+  <circle cx="256" cy="270" r="140" fill="#3b82f6" opacity="0.08" filter="blur(24px)"/>
+
+  <g transform="translate(256 256) scale(0.92) translate(-256 -260)" filter="url(#icon-shadow)">
+    <path fill="url(#padlock-grad)" fill-rule="evenodd" d="
       M 164 202
       L 164 160
       A 92 92 0 0 1 348 160
@@ -27,22 +42,22 @@
       C 158 204 144 214 136 226
       L 136 202
       Z"/>
-    <path fill-rule="evenodd" d="
+    <path fill="url(#padlock-grad)" fill-rule="evenodd" d="
       M 256 198
       A 120 120 0 1 1 255.9 198
       Z
-
+      M 256 238
+      A 80 80 0 1 0 256.1 238
+      Z"/>
+    <path fill="url(#bolt-grad)" d="
       M 259 238
-      A 80 80 0 0 0 230 394
-      L 256 346
-      L 200 346
-      Z
-
-      M 293 247
+      A 80 80 0 0 1 293 247
       L 254 318
       L 312 318
       L 268 397
-      A 80 80 0 0 0 293 247
+      A 80 80 0 0 1 230 394
+      L 256 346
+      L 200 346
       Z"/>
   </g>
 </svg>

@@ -1,24 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 600" width="100%" height="100%">
   <defs>
-    
-    <!-- Brand Cyan-to-Deep-Navy Gradient from original artwork -->
-    <linearGradient id="statim-gradient" x1="90%" y1="0%" x2="10%" y2="100%">
+    <linearGradient id="padlock-grad" x1="90%" y1="0%" x2="10%" y2="100%">
       <stop offset="0%" stop-color="#00daf3"/>
-      <stop offset="22%" stop-color="#00b4d8"/>
-      <stop offset="55%" stop-color="#026cb6"/>
-      <stop offset="82%" stop-color="#09285b"/>
-      <stop offset="100%" stop-color="#07193b"/>
+      <stop offset="28%" stop-color="#3b82f6"/>
+      <stop offset="70%" stop-color="#0d244c"/>
+      <stop offset="100%" stop-color="#1c222b"/>
     </linearGradient>
-    <!-- Linear gradient for typography matching deep navy base -->
-    <linearGradient id="text-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#092454"/>
-      <stop offset="100%" stop-color="#061533"/>
+    <linearGradient id="bolt-grad" x1="85%" y1="5%" x2="15%" y2="95%">
+      <stop offset="0%" stop-color="#00daf3"/>
+      <stop offset="35%" stop-color="#3b82f6"/>
+      <stop offset="68%" stop-color="#f4a261"/>
+      <stop offset="100%" stop-color="#ff5a1f"/>
     </linearGradient>
   </defs>
 
-  <!-- Padlock & Lightning Bolt Emblem (Scaled & Centered at top) -->
-  <g transform="translate(256 215) scale(0.95) translate(-256 -256)" fill="url(#statim-gradient)">
-    <path fill-rule="evenodd" d="
+  <g transform="translate(256 215) scale(0.95) translate(-256 -256)">
+    <path fill="url(#padlock-grad)" fill-rule="evenodd" d="
       M 164 202
       L 164 160
       A 92 92 0 0 1 348 160
@@ -34,120 +31,32 @@
       C 158 204 144 214 136 226
       L 136 202
       Z"/>
-    <path fill-rule="evenodd" d="
+    <path fill="url(#padlock-grad)" fill-rule="evenodd" d="
       M 256 198
       A 120 120 0 1 1 255.9 198
       Z
-
+      M 256 238
+      A 80 80 0 1 0 256.1 238
+      Z"/>
+    <path fill="url(#bolt-grad)" d="
       M 259 238
-      A 80 80 0 0 0 230 394
-      L 256 346
-      L 200 346
-      Z
-
-      M 293 247
+      A 80 80 0 0 1 293 247
       L 254 318
       L 312 318
       L 268 397
-      A 80 80 0 0 0 293 247
+      A 80 80 0 0 1 230 394
+      L 256 346
+      L 200 346
       Z"/>
   </g>
 
-  <!-- STATIM Wordmark -->
-  <!-- Using pure geometric vector path letters for 100% universal rendering independent of system fonts -->
-  <g fill="url(#text-grad)">
-    <!-- S (x ~ 68..116) -->
-    <path d="
-      M 116 488
-      C 116 476 106 468 90 464
-      L 80 461
-      C 72 458 68 454 68 447
-      C 68 438 76 432 89 432
-      C 102 432 111 438 114 449
-      L 125 444
-      C 120 428 107 420 89 420
-      C 68 420 54 431 54 448
-      C 54 461 64 469 79 473
-      L 90 476
-      C 98 479 102 483 102 491
-      C 102 500 93 506 80 506
-      C 65 506 55 498 52 484
-      L 40 489
-      C 44 507 58 518 80 518
-      C 103 518 116 506 116 488
-      Z
-    "/>
-
-    <!-- T (x ~ 138..190) -->
-    <path d="
-      M 138 422
-      H 190
-      V 434
-      H 171
-      V 516
-      H 157
-      V 434
-      H 138
-      Z
-    "/>
-
-    <!-- A (x ~ 206..266) -->
-    <path d="
-      M 236 422
-      L 206 516
-      H 220
-      L 227 493
-      H 257
-      L 264 516
-      H 278
-      L 248 422
-      H 236
-      Z
-      M 231 481
-      L 242 444
-      L 253 481
-      H 231
-      Z
-    "/>
-
-    <!-- T (x ~ 290..342) -->
-    <path d="
-      M 290 422
-      H 342
-      V 434
-      H 323
-      V 516
-      H 309
-      V 434
-      H 290
-      Z
-    "/>
-
-    <!-- I (x ~ 366..380) -->
-    <path d="
-      M 366 422
-      H 380
-      V 516
-      H 366
-      Z
-    "/>
-
-    <!-- M (x ~ 402..462) -->
-    <path d="
-      M 402 422
-      H 416
-      L 432 481
-      L 448 422
-      H 462
-      V 516
-      H 449
-      V 451
-      L 436 498
-      H 428
-      L 415 451
-      V 516
-      H 402
-      Z
-    "/>
+  <!-- Mineral Slate STATIM Wordmark -->
+  <g fill="#1c222b">
+    <path d="M 116 488 C 116 476 106 468 90 464 L 80 461 C 72 458 68 454 68 447 C 68 438 76 432 89 432 C 102 432 111 438 114 449 L 125 444 C 120 428 107 420 89 420 C 68 420 54 431 54 448 C 54 461 64 469 79 473 L 90 476 C 98 479 102 483 102 491 C 102 500 93 506 80 506 C 65 506 55 498 52 484 L 40 489 C 44 507 58 518 80 518 C 103 518 116 506 116 488 Z"/>
+    <path d="M 138 422 H 190 V 434 H 171 V 516 H 157 V 434 H 138 Z"/>
+    <path d="M 236 422 L 206 516 H 220 L 227 493 H 257 L 264 516 H 278 L 248 422 H 236 Z M 231 481 L 242 444 L 253 481 H 231 Z"/>
+    <path d="M 290 422 H 342 V 434 H 323 V 516 H 309 V 434 H 290 Z"/>
+    <path d="M 366 422 H 380 V 516 H 366 Z"/>
+    <path d="M 402 422 H 416 L 432 481 L 448 422 H 462 V 516 H 449 V 451 L 436 498 H 428 L 415 451 V 516 H 402 Z"/>
   </g>
 </svg>

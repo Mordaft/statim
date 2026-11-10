@@ -104,7 +104,7 @@ template.innerHTML = `
     input:focus {
       outline: none;
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.25);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
     }
     input::placeholder {
       color: var(--muted);
@@ -178,6 +178,13 @@ template.innerHTML = `
       color: var(--accent-text);
       cursor: pointer;
       touch-action: manipulation;
+      box-shadow: 0 4px 14px rgb(59 130 246 / 0.3);
+      transition: opacity 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    }
+    button[type="submit"]:hover:not(:disabled) {
+      background: var(--accent-hover);
+      box-shadow: 0 6px 20px rgb(59 130 246 / 0.4);
+    }
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
       transition: opacity 0.15s ease, transform 0.1s ease;
     }
@@ -249,14 +256,20 @@ template.innerHTML = `
           <defs>
             <linearGradient id="login-logo-grad" x1="90%" y1="0%" x2="10%" y2="100%">
               <stop offset="0%" stop-color="#00daf3"/>
-              <stop offset="25%" stop-color="#00b4d8"/>
-              <stop offset="55%" stop-color="#026cb6"/>
-              <stop offset="82%" stop-color="#09285b"/>
-              <stop offset="100%" stop-color="#07193b"/>
+              <stop offset="35%" stop-color="#3b82f6"/>
+              <stop offset="70%" stop-color="#1c222b"/>
+              <stop offset="100%" stop-color="#0f172a"/>
+            </linearGradient>
+            <linearGradient id="login-bolt-grad" x1="85%" y1="5%" x2="15%" y2="95%">
+              <stop offset="0%" stop-color="#00daf3"/>
+              <stop offset="38%" stop-color="#3b82f6"/>
+              <stop offset="68%" stop-color="#f4a261"/>
+              <stop offset="100%" stop-color="#ff5a1f"/>
             </linearGradient>
           </defs>
           <path fill="url(#login-logo-grad)" fill-rule="evenodd" d="M 164 202 L 164 160 A 92 92 0 0 1 348 160 L 348 202 L 376 202 L 376 226 C 368 214 354 204 338 202 L 312 202 L 312 160 A 56 56 0 0 0 200 160 L 200 202 L 174 202 C 158 204 144 214 136 226 L 136 202 Z"/>
-          <path fill="url(#login-logo-grad)" fill-rule="evenodd" d="M 256 198 A 120 120 0 1 1 255.9 198 Z M 259 238 A 80 80 0 0 0 230 394 L 256 346 L 200 346 Z M 293 247 L 254 318 L 312 318 L 268 397 A 80 80 0 0 0 293 247 Z"/>
+          <path fill="url(#login-logo-grad)" fill-rule="evenodd" d="M 256 198 A 120 120 0 1 1 255.9 198 Z M 256 238 A 80 80 0 1 0 256.1 238 Z"/>
+          <path fill="url(#login-bolt-grad)" d="M 259 238 A 80 80 0 0 1 293 247 L 254 318 L 312 318 L 268 397 A 80 80 0 0 1 230 394 L 256 346 L 200 346 Z"/>
         </svg>
         <h2 class="title"></h2>
       </div>

@@ -63,7 +63,8 @@ template.innerHTML = `
       border-radius: 999px;
       background: var(--surface);
       color: var(--muted);
-      box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+      border: 1px solid var(--border);
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
       z-index: 5;
       pointer-events: none;
       user-select: none;
@@ -133,9 +134,11 @@ template.innerHTML = `
       padding: 0.5rem 0.75rem;
       border-radius: var(--radius);
       background: var(--surface);
+      border: 1px solid var(--border);
       min-width: 0;
       word-break: break-word;
       cursor: pointer;
+      box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
     }
     li:not(.mine).grouped .bubble {
       border-top-left-radius: 4px;
@@ -143,6 +146,8 @@ template.innerHTML = `
     li.mine .bubble {
       background: var(--accent);
       color: var(--accent-text);
+      border: 1px solid transparent;
+      box-shadow: 0 2px 8px rgb(59 130 246 / 0.25);
     }
     li.mine.grouped .bubble {
       border-top-right-radius: 4px;
@@ -152,20 +157,51 @@ template.innerHTML = `
       align-items: center;
       gap: 0.5rem;
       font-size: 0.75rem;
-      opacity: 0.75;
       margin-bottom: 0.125rem;
+    }
+    li:not(.mine) .meta span:first-child {
+      color: var(--author-accent, var(--soft-lavender, #c4b5fd));
+      font-weight: 600;
+    }
+    li.mine .meta {
+      opacity: 0.85;
     }
     .delivery-status {
       display: inline-flex;
       align-items: center;
       font-size: 0.6875rem;
-      opacity: 0.9;
       user-select: none;
       margin-left: 0.125rem;
     }
+    .delivery-status.sent {
+      color: var(--celery-mist, #a8b899);
+      opacity: 1;
+    }
+    li.mine .delivery-status.sent {
+      color: rgba(255, 255, 255, 0.9);
+    }
     .delivery-status.pending {
-      opacity: 0.6;
+      color: var(--topaz-volt, #f4a261);
       font-size: 0.625rem;
+      opacity: 0.9;
+    }
+    li.mine .delivery-status.pending {
+      color: rgba(255, 255, 255, 0.75);
+    }
+    .msg-quote {
+      margin: 0 0 0.375rem 0;
+      padding: 0.25rem 0.5rem;
+      border-left: 3px solid var(--soft-lavender, #c4b5fd);
+      background: rgba(196, 181, 253, 0.12);
+      border-radius: 0 4px 4px 0;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+    li.mine .msg-quote {
+      border-left-color: rgba(255, 255, 255, 0.7);
+      background: rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 0.9);
     }
     .text {
       white-space: pre-wrap;
@@ -183,14 +219,18 @@ template.innerHTML = `
       border-radius: 999px;
       font-size: 0.875rem;
       font-weight: 600;
-      background: var(--bg);
+      background: var(--surface);
       color: var(--text);
-      box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+      box-shadow: 0 4px 16px rgb(0 0 0 / 0.2);
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 0.375rem;
       z-index: 10;
+      transition: transform 0.1s ease, background 0.15s ease;
+    }
+    .jump:active {
+      transform: translateX(-50%) scale(0.97);
     }
     .jump[hidden] {
       display: none;
@@ -218,10 +258,12 @@ template.innerHTML = `
       color: var(--text);
       -webkit-appearance: none;
       box-sizing: border-box;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
     textarea:focus {
       outline: none;
       border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
     }
     .btn-emoji-toggle {
       font-size: 1.25rem;
@@ -303,7 +345,12 @@ template.innerHTML = `
       color: var(--accent-text);
       cursor: pointer;
       touch-action: manipulation;
-      transition: opacity 0.15s ease, transform 0.1s ease;
+      box-shadow: 0 2px 8px rgb(59 130 246 / 0.3);
+      transition: opacity 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    }
+    button[type="submit"]:hover:not(:disabled) {
+      background: var(--accent-hover);
+      box-shadow: 0 4px 12px rgb(59 130 246 / 0.4);
     }
     button[type="submit"]:active {
       transform: scale(0.97);
@@ -375,9 +422,11 @@ template.innerHTML = `
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      padding: 0 0.25rem 0.5rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 0.25rem;
+      padding: 0.375rem 0.625rem;
+      border-left: 3px solid var(--soft-lavender, #c4b5fd);
+      background: var(--surface);
+      border-radius: 0 6px 6px 0;
+      margin-bottom: 0.5rem;
     }
     .menu-btn {
       display: flex;
@@ -854,7 +903,23 @@ export class ChatRoom extends HTMLElement {
 
     const text = document.createElement('div');
     text.className = 'text';
-    text.textContent = message.text;
+    if (message.text.startsWith('> ')) {
+      const nl = message.text.indexOf('\n');
+      if (nl !== -1) {
+        const quotePart = message.text.slice(2, nl).trim();
+        const bodyPart = message.text.slice(nl + 1).replace(/^\n+/, '');
+        const qEl = document.createElement('div');
+        qEl.className = 'msg-quote';
+        qEl.textContent = quotePart;
+        const bodyEl = document.createElement('div');
+        bodyEl.textContent = bodyPart;
+        text.append(qEl, bodyEl);
+      } else {
+        text.textContent = message.text;
+      }
+    } else {
+      text.textContent = message.text;
+    }
     bubble.append(meta, text);
 
     // Setup Long-press & Context Menu on bubble

@@ -24,8 +24,9 @@ template.innerHTML = `
       width: 28%;
       height: 28%;
       border-radius: 50%;
-      background: #2da44e;
+      background: #10b981;
       border: 2px solid var(--bg);
+      box-shadow: 0 0 0 1px var(--celery-mist, #a8b899);
     }
     :host([online]) .dot {
       display: block;
