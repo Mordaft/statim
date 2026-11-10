@@ -385,6 +385,8 @@ Web Components con Shadow DOM, sin framework ni librerías externas de UI. Los e
 
 Statim implementa el sistema de diseño digital corporativo **STATIM 2027**, optimizado para dispositivos móviles con pantallas OLED/AMOLED de alta densidad, contraste accesible según WCAG 2.1 AA/AAA y una jerarquía cromática y semántica estricta.
 
+<img width="1408" height="768" alt="statim-desing-system" src="https://github.com/user-attachments/assets/eacca9ed-712a-44cd-9ed8-37a0b43046b8" />
+
 #### Paleta Cromática y Tokens Digitales (`src/styles.css`)
 
 | Rol | Token CSS | Hex | Aplicación y Semántica |
