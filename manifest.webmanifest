@@ -1,4 +1,5 @@
 {
+  "id": "statim-app",
   "name": "Statim",
   "short_name": "Statim",
   "description": "Mensajería instantánea P2P del equipo",
@@ -6,10 +7,12 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0d1117",
-  "theme_color": "#1f6feb",
+  "background_color": "#1c222b",
+  "theme_color": "#1c222b",
   "lang": "es",
+  "categories": ["productivity", "communication", "utilities"],
   "icons": [
-    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "./icons/statim-logo-emblem.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

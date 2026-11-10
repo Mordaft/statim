@@ -1,4 +1,4 @@
-const CACHE = 'statim-v1794324658091';
+const CACHE = 'statim-v1794339748845';
 const SHELL = [
   "./",
   "./index.html",
