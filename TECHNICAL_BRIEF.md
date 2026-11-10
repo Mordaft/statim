@@ -2,7 +2,7 @@
 
 Documento de referencia para desarrollar en Statim: requisitos, arquitectura, protocolo, decisiones de diseño, entorno local, pruebas y limitaciones conocidas.
 
-Los textos de la interfaz están en español. El código, los identificadores y los comentarios del código están en inglés.
+Los textos de la interfaz soportan internacionalización (i18n) en español (por defecto) e inglés (`src/core/i18n.ts`). El código, los identificadores y los comentarios del código están en inglés.
 
 ---
 
@@ -96,6 +96,7 @@ src/
     session.ts             Orquesta Registry + Mesh; credenciales
     diagnostics.ts         Trazas y logs con buffer circular, sanitización y exportación
     identicon.ts           Avatar SVG
+    i18n.ts                Internacionalización (ES/EN), formato de fechas y reactividad
     *.test.ts              Pruebas unitarias
   ui/
     app-shell.ts           <statim-app>: cabecera, estado, login/sala, notificaciones
@@ -385,7 +386,18 @@ Web Components con Shadow DOM, sin framework. Los estilos usan las variables CSS
 | `<peer-list>` | `attach(session)` / `detach()`. Evento `count` con el número de conectados. |
 | `<peer-avatar email="…" online>` | Identicon cacheado. |
 
-- **Mobile-first:** la lista de equipo es un panel superpuesto; a partir de 900 px pasa a columna fija. Altura `100dvh`. Botones de 44 px o más.
+- **Mobile-first & Ergonomía táctil:**
+  - Lista de equipo como panel inferior deslizante (mobile bottom sheet) con tirador y fondo desenfocado; a partir de 900 px pasa a columna fija.
+  - Viewport dinámico sincronizado con `visualViewport` y `<meta name="viewport" content="... interactive-widget=resizes-content" />` para evitar que el teclado virtual tape los mensajes o el campo de entrada.
+  - Agrupación visual de mensajes consecutivos del mismo autor (≤ 3 min), ocultando avatares y cabeceras repetidas para optimizar el espacio vertical.
+  - Pastilla flotante de fecha adhesiva (`.sticky-date`) que informa del día visible mientras se navega por el historial.
+  - Menú contextual táctil en mensajes mediante pulsación larga (400 ms con vibración háptica de 15 ms) y clic derecho en escritorio: copiar texto, citar/responder en el input, ver detalles de entrega y reaccionar con emojis rápidos.
+  - Barra de emojis rápidos desplegable sobre el input (`.emoji-bar`) con botón alternador `😊` y vibración táctil al pulsar.
+  - Indicadores de entrega P2P: reloj `🕒` (guardado local pendiente de pares) y doble check `✓✓` (transmitido a la malla WebRTC).
+  - Deslizamiento hacia abajo (*pull-to-refresh*) para comprobar señales de Confluence bajo demanda.
+  - Pastilla interactiva de estado en la cabecera que abre una hoja modal (`.net-sheet`) con estadísticas de la malla WebRTC, presupuesto de peticiones de Confluence y comprobación inmediata.
+  - Soporte multi-idioma nativo y tipado (`src/core/i18n.ts`) con selector ES/EN persistente.
+  - Identidad visual renovada: monograma P2P 'S' vectorial (`concept-2-monogram.svg`) y concepto de escudo de privacidad (`concept-3-shield.svg`), adaptados a zona segura de iconos maskable.
 - **Layout:** la altura se reparte con grids `minmax(0, 1fr)` hasta la `<ol>`, que es la única zona con scroll. No pongas `display` en `statim-app` desde [styles.css](src/styles.css): los estilos del documento ganan a `:host` y romperían el grid, y el cuadro de texto acabaría fuera de pantalla.
 - **Repintado sin saltos (`<chat-room>`):**
   - Cada lote se inserta en una sola pasada, en orden de `ts`, con un cursor que recorre la lista desde el final (O(n+m)). Los `msgId` ya pintados se ignoran.
@@ -412,6 +424,10 @@ Web Components con Shadow DOM, sin framework. Los estilos usan las variables CSS
   - Notificación en la interfaz (`<statim-app>`): banner superior no invasivo con botón «Actualizar» y opción de descartar (dejando un botón sutil en la cabecera).
   - Al pulsar «Actualizar»: envía `SKIP_WAITING` al Service Worker en espera y recarga en `controllerchange`.
   - Build automático (`vite.config.ts`): inyecta automáticamente la versión de caché y los nombres hasheados de los assets en `dist/sw.js` en cada compilación.
+- **Instalación y Badge nativo:**
+  - Captura del evento `beforeinstallprompt` mostrando banner con botón «Instalar app» y posibilidad de descartarlo.
+  - Detección de iOS Safari en modo navegador mostrando guía paso a paso (*"Pulsa Compartir ⎋ y luego 'Añadir a pantalla de inicio' ⊞"*).
+  - Integración con la API de Badge del sistema (`navigator.setAppBadge` / `navigator.clearAppBadge`) que refleja el contador de mensajes no leídos cuando la ventana está en segundo plano.
 
 ---
 

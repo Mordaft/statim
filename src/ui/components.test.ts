@@ -351,4 +351,212 @@ describe('<chat-room>', () => {
       expect(indicator.textContent).toBe('Actualizando...');
     });
   });
+
+  describe('Fase 1: Mobile UI & i18n additions', () => {
+    it('groups consecutive messages from the same sender within 3 minutes', async () => {
+      const session = fakeSession(['bob@x.com']);
+      const room = mount<ChatRoom>('chat-room');
+      await room.attach(session);
+
+      // Same sender, 30s apart
+      emit(session, [
+        { msgId: 'm1', from: 'bob@x.com', text: 'uno', ts: 1000 },
+        { msgId: 'm2', from: 'bob@x.com', text: 'dos', ts: 31_000 },
+        // Same sender, 4 minutes later (> 180s)
+        { msgId: 'm3', from: 'bob@x.com', text: 'tres', ts: 300_000 },
+      ]);
+
+      const items = room.shadowRoot!.querySelectorAll('li');
+      expect(items[0].classList.contains('grouped')).toBe(false);
+      expect(items[1].classList.contains('grouped')).toBe(true);
+      expect(items[2].classList.contains('grouped')).toBe(false);
+    });
+
+    it('emits close event from peer-list close button', () => {
+      const peerList = mount<HTMLElement>('peer-list');
+      const closeBtn = peerList.shadowRoot!.querySelector<HTMLButtonElement>('.close-btn')!;
+      const onClose = vi.fn();
+      peerList.addEventListener('close', onClose);
+
+      closeBtn.click();
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('toggles language and updates UI labels', () => {
+      const app = mount<StatimApp>('statim-app');
+      const langBtn = app.shadowRoot!.querySelector<HTMLButtonElement>('.lang-btn')!;
+
+      // Starts in ES, button offers to switch to EN
+      expect(langBtn.textContent).toBe('EN');
+      langBtn.click();
+
+      // Now in EN, button offers to switch to ES
+      expect(langBtn.textContent).toBe('ES');
+      expect(app.shadowRoot!.querySelector('.logout')!.textContent).toBe('Sign out');
+
+      langBtn.click();
+      expect(langBtn.textContent).toBe('EN');
+      expect(app.shadowRoot!.querySelector('.logout')!.textContent).toBe('Salir');
+    });
+
+    it('closes mobile bottom sheet when backdrop is clicked', () => {
+      const app = mount<StatimApp>('statim-app');
+      const aside = app.shadowRoot!.querySelector<HTMLElement>('aside')!;
+      const backdrop = app.shadowRoot!.querySelector<HTMLElement>('.backdrop')!;
+      const peersBtn = app.shadowRoot!.querySelector<HTMLButtonElement>('.peers')!;
+
+      expect(aside.hidden).toBe(true);
+      expect(backdrop.hidden).toBe(true);
+
+      peersBtn.click();
+      expect(aside.hidden).toBe(false);
+      expect(backdrop.hidden).toBe(false);
+
+      backdrop.click();
+      expect(aside.hidden).toBe(true);
+      expect(backdrop.hidden).toBe(true);
+    });
+  });
+
+  describe('Fase 2: P2P Feedback & Touch Interactions', () => {
+    it('shows delivery status pending when 0 peers and sent when peers connect', async () => {
+      const session = fakeSession([]); // 0 peers connected
+      const room = mount<ChatRoom>('chat-room');
+      await room.attach(session);
+
+      // Send a message as ana@x.com
+      emit(session, [{ msgId: 'm1', from: 'ana@x.com', text: 'propio', ts: 1000 }]);
+
+      const delivery = room.shadowRoot!.querySelector<HTMLElement>('li.mine .delivery-status')!;
+      expect(delivery).not.toBeNull();
+      expect(delivery.textContent).toBe('🕒');
+      expect(delivery.classList.contains('pending')).toBe(true);
+
+      // Now 1 peer connects
+      (session.mesh as any).connectedPeers = () => ['bob@x.com'];
+      session.mesh.dispatchEvent(new Event('links'));
+
+      expect(delivery.textContent).toBe('✓✓');
+      expect(delivery.classList.contains('sent')).toBe(true);
+    });
+
+    it('opens context menu on message and formats quote in input on reply click', async () => {
+      const session = fakeSession(['bob@x.com']);
+      const room = mount<ChatRoom>('chat-room');
+      await room.attach(session);
+
+      emit(session, [{ msgId: 'm1', from: 'bob@x.com', text: 'mensaje original', ts: 1000 }]);
+
+      const bubble = room.shadowRoot!.querySelector<HTMLElement>('li .bubble')!;
+      const sheet = room.shadowRoot!.querySelector<HTMLElement>('.msg-menu-sheet')!;
+      const backdrop = room.shadowRoot!.querySelector<HTMLElement>('.msg-menu-backdrop')!;
+      const replyBtn = room.shadowRoot!.querySelector<HTMLButtonElement>('.btn-reply')!;
+      const input = room.shadowRoot!.querySelector<HTMLTextAreaElement>('textarea')!;
+
+      expect(sheet.hidden).toBe(true);
+
+      // Context menu / long-press trigger
+      bubble.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+
+      expect(sheet.hidden).toBe(false);
+      expect(backdrop.hidden).toBe(false);
+
+      // Click reply
+      replyBtn.click();
+      expect(sheet.hidden).toBe(true);
+      expect(input.value).toContain('> bob: mensaje original');
+    });
+
+    it('opens and closes network status sheet from header pill', () => {
+      const app = mount<StatimApp>('statim-app');
+      const statusBtn = app.shadowRoot!.querySelector<HTMLButtonElement>('.status')!;
+      const netSheet = app.shadowRoot!.querySelector<HTMLElement>('.net-sheet')!;
+      const netBackdrop = app.shadowRoot!.querySelector<HTMLElement>('.net-backdrop')!;
+      const closeBtn = app.shadowRoot!.querySelector<HTMLButtonElement>('.net-close')!;
+
+      expect(netSheet.hidden).toBe(true);
+      expect(netBackdrop.hidden).toBe(true);
+
+      // Fake active session on app
+      app.setSessionForTesting({
+        registry: { activePeers: async () => [], remainingFastBudget: 95, holdFastPolling: vi.fn() },
+      } as any);
+
+      statusBtn.click();
+      expect(netSheet.hidden).toBe(false);
+      expect(netBackdrop.hidden).toBe(false);
+
+      closeBtn.click();
+      expect(netSheet.hidden).toBe(true);
+      expect(netBackdrop.hidden).toBe(true);
+    });
+  });
+
+  describe('Fase 3: Emojis, PWA install banner & Visual identity', () => {
+    it('toggles quick emoji bar and inserts emoji into input', async () => {
+      const session = fakeSession(['bob@x.com']);
+      const room = mount<ChatRoom>('chat-room');
+      await room.attach(session);
+
+      const toggleBtn = room.shadowRoot!.querySelector<HTMLButtonElement>('.btn-emoji-toggle')!;
+      const emojiBar = room.shadowRoot!.querySelector<HTMLElement>('.emoji-bar')!;
+      const input = room.shadowRoot!.querySelector<HTMLTextAreaElement>('textarea')!;
+
+      expect(emojiBar.hidden).toBe(true);
+      toggleBtn.click();
+      expect(emojiBar.hidden).toBe(false);
+
+      const emojiBtn = room.shadowRoot!.querySelector<HTMLButtonElement>('.emoji-btn[data-emoji="👍"]')!;
+      expect(emojiBtn).not.toBeNull();
+      emojiBtn.click();
+
+      expect(input.value).toBe('👍');
+
+      // Click another emoji
+      const fireBtn = room.shadowRoot!.querySelector<HTMLButtonElement>('.emoji-btn[data-emoji="🔥"]')!;
+      fireBtn.click();
+      expect(input.value).toBe('👍🔥');
+    });
+
+    it('quotes message with reaction emoji from context menu', async () => {
+      const session = fakeSession(['bob@x.com']);
+      const room = mount<ChatRoom>('chat-room');
+      await room.attach(session);
+
+      emit(session, [{ msgId: 'm2', from: 'bob@x.com', text: 'gran trabajo', ts: 2000 }]);
+
+      const bubble = room.shadowRoot!.querySelector<HTMLElement>('li .bubble')!;
+      const sheet = room.shadowRoot!.querySelector<HTMLElement>('.msg-menu-sheet')!;
+      const input = room.shadowRoot!.querySelector<HTMLTextAreaElement>('textarea')!;
+
+      bubble.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      expect(sheet.hidden).toBe(false);
+
+      const heartReact = room.shadowRoot!.querySelector<HTMLButtonElement>('.react-btn[data-emoji="❤️"]')!;
+      expect(heartReact).not.toBeNull();
+      heartReact.click();
+
+      expect(sheet.hidden).toBe(true);
+      expect(input.value).toContain('> bob: gran trabajo\n❤️ ');
+    });
+
+    it('shows and dismisses PWA install banner on beforeinstallprompt', () => {
+      localStorage.removeItem('statim.install_dismissed');
+      const app = mount<StatimApp>('statim-app');
+      const banner = app.shadowRoot!.querySelector<HTMLElement>('.install-banner')!;
+      const dismissBtn = app.shadowRoot!.querySelector<HTMLButtonElement>('.install-dismiss')!;
+
+      expect(banner.hidden).toBe(true);
+
+      const promptEvent = new Event('beforeinstallprompt');
+      (promptEvent as any).prompt = vi.fn();
+      window.dispatchEvent(promptEvent);
+
+      expect(banner.hidden).toBe(false);
+
+      dismissBtn.click();
+      expect(banner.hidden).toBe(true);
+      expect(localStorage.getItem('statim.install_dismissed')).toBe('1');
+    });
+  });
 });

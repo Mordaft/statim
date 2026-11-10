@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="shield-bg-grad" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#161b22"/>
+      <stop offset="60%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#05080c"/>
+    </radialGradient>
+
+    <!-- Shield Border Gradient -->
+    <linearGradient id="shield-stroke-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#58a6ff"/>
+      <stop offset="50%" stop-color="#1f6feb"/>
+      <stop offset="100%" stop-color="#2ea043"/>
+    </linearGradient>
+
+    <!-- Waves Gradient -->
+    <linearGradient id="wave-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#79c0ff"/>
+      <stop offset="50%" stop-color="#388bfd"/>
+      <stop offset="100%" stop-color="#56d364"/>
+    </linearGradient>
+
+    <!-- Shield Interior Tint -->
+    <linearGradient id="shield-fill-grad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#1f6feb" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#2ea043" stop-opacity="0.05"/>
+    </linearGradient>
+
+    <filter id="shield-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <filter id="shield-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#000000" flood-opacity="0.65"/>
+    </filter>
+  </defs>
+
+  <!-- Maskable Safe Background -->
+  <rect width="512" height="512" rx="112" fill="url(#shield-bg-grad)"/>
+
+  <!-- Main Shield Body -->
+  <g filter="url(#shield-shadow)">
+    <!-- Converging P2P Signal Arcs (Outside Shield) -->
+    <path d="M 120 180 A 160 160 0 0 1 120 332" fill="none" stroke="#58a6ff" stroke-width="8" stroke-linecap="round" opacity="0.45"/>
+    <path d="M 85 140 A 220 220 0 0 1 85 372" fill="none" stroke="#58a6ff" stroke-width="6" stroke-linecap="round" opacity="0.25"/>
+
+    <path d="M 392 180 A 160 160 0 0 0 392 332" fill="none" stroke="#56d364" stroke-width="8" stroke-linecap="round" opacity="0.45"/>
+    <path d="M 427 140 A 220 220 0 0 0 427 372" fill="none" stroke="#56d364" stroke-width="6" stroke-linecap="round" opacity="0.25"/>
+
+    <!-- Geometric Privacy Shield Silhouette -->
+    <!-- Starts at top center (256, 110), goes right to (376, 175), curves down to (256, 420), curves up to (136, 175), closes at top -->
+    <path d="M 256 110
+             L 376 165
+             C 376 280, 330 365, 256 415
+             C 182 365, 136 280, 136 165
+             Z"
+          fill="url(#shield-fill-grad)"
+          stroke="url(#shield-stroke-grad)"
+          stroke-width="16"
+          stroke-linejoin="round"
+          stroke-linecap="round"
+          filter="url(#shield-glow)"/>
+
+    <!-- Stylized 'S' Dynamic Encrypted Channel Wave Inside Shield -->
+    <path d="M 320 200
+             C 270 170, 205 210, 205 245
+             C 205 285, 307 275, 307 315
+             C 307 350, 242 380, 192 350"
+          fill="none"
+          stroke="url(#wave-grad)"
+          stroke-width="26"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+
+    <!-- Top Key/Peer Node -->
+    <circle cx="320" cy="200" r="16" fill="#0d1117" stroke="#79c0ff" stroke-width="6"/>
+    <circle cx="320" cy="200" r="7" fill="#ffffff"/>
+
+    <!-- Bottom Key/Peer Node -->
+    <circle cx="192" cy="350" r="16" fill="#0d1117" stroke="#56d364" stroke-width="6"/>
+    <circle cx="192" cy="350" r="7" fill="#ffffff"/>
+
+    <!-- Central Lock Indicator (AES-GCM direct peer seal) -->
+    <circle cx="256" cy="280" r="10" fill="#ffffff" opacity="0.85"/>
+  </g>
+</svg>
