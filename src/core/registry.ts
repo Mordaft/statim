@@ -1,7 +1,7 @@
 import { config } from '../config.ts';
-import { ConfluenceError, type ConfluenceClient } from './confluence-client.ts';
+import { ConfluenceError, encodePropertyValue, PropertySizeError, type ConfluenceClient } from './confluence-client.ts';
 import { forgetKey, generateSeed } from './crypto.ts';
-import { db, type OwnComment, type OwnSeed, type Peer } from './db.ts';
+import { db, type OwnProperty, type OwnSeed, type Peer } from './db.ts';
 import { identiconSvg } from './identicon.ts';
 import { MAX_SIGNAL_ITEMS, type Announce, type Signal, type SignalBatch, type SignalItem } from './protocol.ts';
 import { detectPublicIp } from './public-ip.ts';
@@ -14,7 +14,7 @@ interface OutboxEntry {
   reject: (reason: unknown) => void;
 }
 
-// Re-read a small window to tolerate comments that become visible late.
+// Re-read a small window to tolerate properties that become visible late.
 const POLL_OVERLAP_MS = 30_000;
 const MAX_PEER_SEEDS = 3;
 
@@ -96,7 +96,7 @@ export class Registry extends EventTarget {
     return db.peers.where('lastSeen').above(Date.now() - config.announceTtlMs).toArray();
   }
 
-  /** Queues a signal; signals queued close together are sent in a single comment. */
+  /** Queues signals into size-limited properties. */
   sendSignal(item: OutgoingSignal): Promise<void> {
     return new Promise((resolve, reject) => {
       this.#outbox.push({ item, resolve, reject });
@@ -111,7 +111,10 @@ export class Registry extends EventTarget {
     const batch = this.#outbox.splice(0, MAX_SIGNAL_ITEMS);
     if (this.#outbox.length) this.#flushTimer = setTimeout(() => void this.#flush(), 0);
     if (!batch.length) return;
+    await this.#publishSignals(batch);
+  }
 
+  async #publishSignals(batch: OutboxEntry[]): Promise<void> {
     const envelope: SignalBatch = {
       t: 'signals',
       v: 1,
@@ -121,10 +124,17 @@ export class Registry extends EventTarget {
       ts: Date.now(),
     };
     try {
-      const commentId = await this.#client.post(envelope, true);
-      await db.ownComments.add({ commentId, kind: 'signal', ts: Date.now() });
+      encodePropertyValue(envelope);
+      const propertyKey = await this.#client.post(envelope, true);
+      await db.ownProperties.add({ propertyKey, kind: 'signal', ts: Date.now() });
       batch.forEach((b) => b.resolve());
     } catch (e) {
+      if (e instanceof PropertySizeError && batch.length > 1) {
+        const middle = Math.ceil(batch.length / 2);
+        await this.#publishSignals(batch.slice(0, middle));
+        await this.#publishSignals(batch.slice(middle));
+        return;
+      }
       batch.forEach((b) => b.reject(e));
     }
   }
@@ -145,8 +155,8 @@ export class Registry extends EventTarget {
 
     // Joining is the only case where announcing fast is justified.
     if (rotate || startup) await this.#announce(current, startup);
-    await db.processedSignals.where('ts').below(now - config.announceTtlMs).delete();
-    this.#purgeOwnComments().catch((e) => this.#emitError(e));
+    await db.processedProperties.where('ts').below(now - config.announceTtlMs).delete();
+    this.#purgeOwnProperties().catch((e) => this.#emitError(e));
   }
 
   async #announce(seed: OwnSeed, urgent: boolean): Promise<void> {
@@ -160,18 +170,18 @@ export class Registry extends EventTarget {
       seed: seed.seed,
       ts: Date.now(),
     };
-    const commentId = await this.#client.post(envelope, urgent);
-    await db.ownComments.add({ commentId, kind: 'announce', ts: Date.now() });
+    const propertyKey = await this.#client.post(envelope, urgent);
+    await db.ownProperties.add({ propertyKey, kind: 'announce', ts: Date.now() });
   }
 
-  async #purgeOwnComments(): Promise<void> {
+  async #purgeOwnProperties(): Promise<void> {
     if (this.#purging) return;
     this.#purging = true;
     try {
       const now = Date.now();
-      const announces = await db.ownComments.where('kind').equals('announce').sortBy('ts');
-      const signals = await db.ownComments.where('kind').equals('signal').toArray();
-      const stale: OwnComment[] = [
+      const announces = await db.ownProperties.where('kind').equals('announce').sortBy('ts');
+      const signals = await db.ownProperties.where('kind').equals('signal').toArray();
+      const stale: OwnProperty[] = [
         ...announces.slice(0, -1),
         ...signals.filter((s) => now - s.ts > config.signalTtlMs),
       ];
@@ -179,11 +189,11 @@ export class Registry extends EventTarget {
       for (const c of stale) {
         if (!this.#running) return;
         try {
-          await this.#client.remove(c.commentId);
+          await this.#client.remove(c.propertyKey);
         } catch (e) {
           if (!(e instanceof ConfluenceError && e.status === 404)) throw e;
         }
-        await db.ownComments.delete(c.commentId);
+        await db.ownProperties.delete(c.propertyKey);
       }
     } finally {
       this.#purging = false;
@@ -206,7 +216,7 @@ export class Registry extends EventTarget {
 
   async #pollOnce(): Promise<void> {
     const entries = (await this.#client.listSince(this.#since, this.#wantsFast)).reverse();
-    for (const { commentId, createdAt, envelope } of entries) {
+    for (const { propertyKey, createdAt, envelope } of entries) {
       this.#since = Math.max(this.#since, createdAt - POLL_OVERLAP_MS);
       if (envelope.t === 'announce') {
         if (envelope.email !== this.email) await this.#upsertPeer(envelope, createdAt);
@@ -214,8 +224,8 @@ export class Registry extends EventTarget {
       }
 
       const mine = envelope.items.filter((i) => i.to === this.email && i.toSession === this.session);
-      if (!mine.length || (await db.processedSignals.get(commentId))) continue;
-      await db.processedSignals.add({ commentId, ts: Date.now() });
+      if (!mine.length || (await db.processedProperties.get(propertyKey))) continue;
+      await db.processedProperties.add({ propertyKey, ts: Date.now() });
       for (const item of mine) {
         const detail: Signal = { ...item, from: envelope.from, fromSession: envelope.fromSession };
         this.dispatchEvent(new CustomEvent<Signal>('signal', { detail }));

@@ -4,6 +4,7 @@
   Proxy local para llamar a la API REST de Confluence desde Statim sin problemas de CORS.
 .EXAMPLE
   pwsh localproxy.ps1 https://tu-sitio.atlassian.net
+  pwsh localproxy.ps1 https://confluence.example.com/confluence -Port 8880
   pwsh localproxy.ps1 https://tu-sitio.atlassian.net -Port 9000 -AllowedOrigin http://localhost:5173
 #>
 [CmdletBinding()]
@@ -26,13 +27,18 @@ $ErrorActionPreference = 'Stop'
 $isLocalTarget = $TargetUrl.Host -in @('localhost', '127.0.0.1')
 if ($TargetUrl.Scheme -ne 'https' -and -not $isLocalTarget) { throw 'La URL de Confluence debe ser https (http solo para localhost).' }
 $target = $TargetUrl.GetLeftPart([UriPartial]::Authority)
+$targetPath = $TargetUrl.AbsolutePath.TrimEnd('/')
 
-$forwardHeaders = @('Authorization', 'Accept')
+$forwardHeaders = @('Authorization', 'Accept', 'Cookie', 'request-start-time')
 $returnHeaders = @('Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset')
 
 Add-Type -AssemblyName System.Net.Http
 
-$client = [System.Net.Http.HttpClient]::new()
+$handler = [System.Net.Http.HttpClientHandler]::new()
+$handler.UseCookies = $false
+$handler.AllowAutoRedirect = $false
+$handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
+$client = [System.Net.Http.HttpClient]::new($handler)
 $client.Timeout = [TimeSpan]::FromSeconds(30)
 
 $listener = [System.Net.HttpListener]::new()
@@ -49,9 +55,10 @@ function Write-RequestLog([System.Net.HttpListenerRequest]$req) {
   foreach ($key in $req.QueryString.AllKeys) {
     Write-Host "  ?$key=$($req.QueryString[$key])" -ForegroundColor Yellow
   }
+  Write-Host '  Cabeceras de entrada (navegador -> proxy):' -ForegroundColor DarkGray
   foreach ($key in $req.Headers.AllKeys) {
     # Never print credentials.
-    $value = if ($key -eq 'Authorization') { (($req.Headers[$key] -split ' ')[0]) + ' ***' } else { $req.Headers[$key] }
+    $value = if ($key -in @('Authorization', 'Cookie')) { '***' } else { $req.Headers[$key] }
     Write-Host "  ${key}: $value" -ForegroundColor DarkGray
   }
 }
@@ -62,7 +69,7 @@ function Set-Cors([System.Net.HttpListenerRequest]$req, [System.Net.HttpListener
   $res.AddHeader('Access-Control-Allow-Origin', $origin)
   $res.AddHeader('Vary', 'Origin')
   $res.AddHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  $res.AddHeader('Access-Control-Allow-Headers', 'Authorization, Accept, Content-Type')
+  $res.AddHeader('Access-Control-Allow-Headers', 'Authorization, Accept, Content-Type, X-Atlassian-Token')
   $res.AddHeader('Access-Control-Expose-Headers', ($returnHeaders -join ', '))
   $res.AddHeader('Access-Control-Max-Age', '600')
 }
@@ -75,11 +82,19 @@ function Send-Text([System.Net.HttpListenerResponse]$res, [int]$status, [string]
 }
 
 function Invoke-Forward([System.Net.HttpListenerRequest]$req, [System.Net.HttpListenerResponse]$res) {
-  $msg = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::new($req.HttpMethod), $target + $req.Url.PathAndQuery)
+  $path = $req.Url.PathAndQuery
+  if ($targetPath -and $req.Url.AbsolutePath.StartsWith('/rest/')) { $path = $targetPath + $path }
+  $msg = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::new($req.HttpMethod), $target + $path)
   foreach ($name in $forwardHeaders) {
     if ($req.Headers[$name]) { [void]$msg.Headers.TryAddWithoutValidation($name, $req.Headers[$name]) }
   }
   [void]$msg.Headers.TryAddWithoutValidation('X-Atlassian-Token', 'no-check')
+  [void]$msg.Headers.TryAddWithoutValidation('User-Agent', 'bruno-runtime/1.0')
+  [void]$msg.Headers.TryAddWithoutValidation('Connection', 'keep-alive')
+  if (-not $msg.Headers.Contains('Accept')) { [void]$msg.Headers.TryAddWithoutValidation('Accept', 'application/json') }
+  if (-not $msg.Headers.Contains('request-start-time')) {
+    [void]$msg.Headers.TryAddWithoutValidation('request-start-time', [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds().ToString())
+  }
 
   if ($req.HasEntityBody) {
     $reader = [IO.StreamReader]::new($req.InputStream, $req.ContentEncoding)
@@ -87,9 +102,12 @@ function Invoke-Forward([System.Net.HttpListenerRequest]$req, [System.Net.HttpLi
     $reader.Dispose()
     $mediaType = if ($req.ContentType) { ($req.ContentType -split ';')[0].Trim() } else { 'application/json' }
     $msg.Content = [System.Net.Http.StringContent]::new($body, [Text.Encoding]::UTF8, $mediaType)
+    $msg.Content.Headers.ContentType.CharSet = $null
     Write-Preview 'body' $body
   }
 
+  Write-Host "  SALIDA proxy -> destino: $($msg.Method) $($msg.RequestUri.AbsoluteUri)" -ForegroundColor Cyan
+  Write-Host "    Host: $($msg.RequestUri.Authority)" -ForegroundColor DarkGray
   $watch = [Diagnostics.Stopwatch]::StartNew()
   # SendAsync: the synchronous Send() does not exist on pwsh 7.0 (.NET Core 3.1).
   $resp = $client.SendAsync($msg).GetAwaiter().GetResult()
@@ -134,8 +152,8 @@ try {
         $res.StatusCode = 204
         Write-Host '  -> 204 preflight' -ForegroundColor Green
       }
-      elseif (-not ($req.Url.AbsolutePath.StartsWith('/wiki/') -or $req.Url.AbsolutePath.StartsWith('/rest/'))) {
-        Send-Text $res 404 'Solo se reenvían rutas /wiki/ o /rest/'
+      elseif (-not ($req.Url.AbsolutePath.StartsWith('/wiki/') -or $req.Url.AbsolutePath.StartsWith('/rest/') -or $req.Url.AbsolutePath.StartsWith('/confluence/rest/'))) {
+        Send-Text $res 404 'Solo se reenvían rutas /wiki/, /rest/ o /confluence/rest/'
         Write-Host '  -> 404 ruta no permitida' -ForegroundColor Red
       }
       else {

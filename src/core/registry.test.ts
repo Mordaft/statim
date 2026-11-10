@@ -3,6 +3,7 @@ import type { ConfluenceClient, FeedEntry, Urgency } from './confluence-client.t
 import { db, type Peer } from './db.ts';
 import type { Announce, Envelope, Signal, SignalBatch } from './protocol.ts';
 import { Registry } from './registry.ts';
+import { ConfluenceError, encodePropertyValue, PropertySizeError } from './confluence-client.ts';
 
 vi.mock('./public-ip.ts', () => ({ detectPublicIp: vi.fn(async () => '203.0.113.7') }));
 
@@ -57,7 +58,7 @@ describe('Registry', () => {
     expect(first.envelope).toMatchObject({ t: 'announce', email: 'ana@x.com', session: registry.session, ip: '203.0.113.7' });
     const seed = await registry.currentSeed();
     expect(first.envelope).toMatchObject({ seedId: seed.seedId, seed: seed.seed });
-    expect(await db.ownComments.count()).toBe(1);
+    expect(await db.ownProperties.count()).toBe(1);
     registry.stop();
   });
 
@@ -77,8 +78,8 @@ describe('Registry', () => {
     const peers: Peer[] = [];
     registry.addEventListener('peer', (e) => peers.push((e as CustomEvent<Peer>).detail));
     client.feed.push([
-      { commentId: '10', createdAt: Date.now(), envelope: announceFrom('bob@x.com') },
-      { commentId: '11', createdAt: Date.now(), envelope: announceFrom('ana@x.com') },
+      { propertyKey: '10', createdAt: Date.now(), envelope: announceFrom('bob@x.com') },
+      { propertyKey: '11', createdAt: Date.now(), envelope: announceFrom('ana@x.com') },
     ]);
 
     await registry.start();
@@ -106,8 +107,8 @@ describe('Registry', () => {
         { to: 'cid@x.com', toSession: 'cid-s', kind: 'offer', data: 'other' },
       ],
     };
-    client.feed.push([{ commentId: '20', createdAt: Date.now(), envelope: batch }]);
-    client.feed.push([{ commentId: '20', createdAt: Date.now(), envelope: batch }]);
+    client.feed.push([{ propertyKey: '20', createdAt: Date.now(), envelope: batch }]);
+    client.feed.push([{ propertyKey: '20', createdAt: Date.now(), envelope: batch }]);
 
     await registry.start();
     await vi.waitFor(() => expect(client.listSince).toHaveBeenCalledTimes(3));
@@ -116,7 +117,7 @@ describe('Registry', () => {
     registry.stop();
   });
 
-  it('packs signals queued together into one urgent comment', async () => {
+  it('packs signals queued together into one urgent property', async () => {
     const { client, registry } = setup();
     await registry.start();
     client.posts.length = 0;
@@ -129,6 +130,53 @@ describe('Registry', () => {
     expect(client.posts).toHaveLength(1);
     expect(client.posts[0].urgent).toBe(true);
     expect((client.posts[0].envelope as SignalBatch).items.map((i) => i.to)).toEqual(['bob@x.com', 'cid@x.com']);
+    registry.stop();
+  });
+
+  it('splits oversized batches without losing signals', async () => {
+    const { client, registry } = setup();
+    await registry.start();
+    client.posts.length = 0;
+    const items = Array.from({ length: 4 }, () => ({
+      to: 'bob@x.com', toSession: 'b', kind: 'offer' as const,
+      data: Array.from({ length: 500 }, () => crypto.randomUUID()).join(''),
+    }));
+    await Promise.all(items.map((item) => registry.sendSignal(item)));
+    expect(client.posts.length).toBeGreaterThan(1);
+    expect(client.posts.flatMap(({ envelope }) => (envelope as SignalBatch).items)).toEqual(items);
+    for (const { envelope } of client.posts) expect(() => encodePropertyValue(envelope)).not.toThrow();
+    registry.stop();
+  });
+
+  it('rejects a single oversized signal and still publishes its valid neighbor', async () => {
+    const { client, registry } = setup();
+    await registry.start();
+    client.posts.length = 0;
+    const outcomes = await Promise.allSettled([
+      registry.sendSignal({ to: 'bob@x.com', toSession: 'b', kind: 'offer',
+        data: Array.from({ length: 3000 }, () => crypto.randomUUID()).join('') }),
+      registry.sendSignal({ to: 'cid@x.com', toSession: 'c', kind: 'answer', data: 'valid' }),
+    ]);
+    expect(outcomes[0]).toMatchObject({ status: 'rejected', reason: expect.any(PropertySizeError) });
+    expect(outcomes[1].status).toBe('fulfilled');
+    expect(client.posts).toHaveLength(1);
+    registry.stop();
+  });
+
+  it('purges only tracked stale properties and tolerates missing ones', async () => {
+    const { client, registry } = setup();
+    const now = Date.now();
+    await db.ownProperties.bulkAdd([
+      { propertyKey: 'statim.v1.old-announce', kind: 'announce', ts: now - 60_000 },
+      { propertyKey: 'statim.v1.old-signal', kind: 'signal', ts: now - 600_000 },
+      { propertyKey: 'statim.v1.fresh-signal', kind: 'signal', ts: now },
+    ]);
+    client.remove.mockRejectedValueOnce(new ConfluenceError(404));
+    await registry.start();
+    await vi.waitFor(() => expect(client.remove).toHaveBeenCalledTimes(2));
+    await vi.waitFor(async () => expect(await db.ownProperties.count()).toBe(2));
+    expect(client.remove.mock.calls).toEqual([['statim.v1.old-announce'], ['statim.v1.old-signal']]);
+    expect(await db.ownProperties.get('statim.v1.fresh-signal')).toBeDefined();
     registry.stop();
   });
 

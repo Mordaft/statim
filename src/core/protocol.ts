@@ -22,7 +22,7 @@ export interface SignalItem {
   data: unknown;
 }
 
-/** Several signals from one sender packed in a single comment to save requests. */
+/** Several signals from one sender packed in a single property to save requests. */
 export interface SignalBatch {
   t: 'signals';
   v: 1;
@@ -53,7 +53,7 @@ function email(v: unknown): string | null {
   return s && EMAIL_RE.test(s) ? s.toLowerCase() : null;
 }
 
-// Comments are writable by anyone with page access: rebuild objects from validated fields only.
+// Properties are writable by page editors: rebuild objects from validated fields only.
 export function parseEnvelope(raw: unknown): Envelope | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;

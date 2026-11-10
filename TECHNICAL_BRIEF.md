@@ -12,7 +12,7 @@ Los textos de la interfaz están en español. El código, los identificadores y 
 |---|---|
 | SPA/PWA de mensajería, **mobile-first** | Vanilla TypeScript + Web Components + Vite. PWA con `manifest` y Service Worker propio. |
 | **Sin servidor intermedio** que reparta mensajes | Malla WebRTC (DataChannel) entre todos los clientes. |
-| Registro y descubrimiento vía **Confluence Cloud REST** | Comentarios de pie de página (API v2) de una página fija. Cada comentario es un sobre JSON. |
+| Registro y descubrimiento vía **Confluence REST** | Content properties (API v1) de una página fija. Cada anuncio o lote de señales ocupa una propiedad independiente. |
 | Datos publicados: email, IP pública, semilla de cifrado | Anuncio `announce`. La IP se obtiene por STUN y es solo informativa: WebRTC usa sus propios candidatos ICE. |
 | Avatar gráfico | Identicon 5×5 determinista a partir del SHA-256 del email. No viaja por la red; cada cliente lo genera. |
 | Persistencia en IndexedDB | Dexie.js. |
@@ -23,7 +23,7 @@ Los textos de la interfaz están en español. El código, los identificadores y 
 | Segundo plano | *Best-effort*: notificaciones locales mientras la página siga viva. Suspendida = desconectada. |
 | Equipo de 10–20 personas | Malla completa, máximo 20 pares (`maxPeers`). |
 | **Límite de peticiones a Confluence** | Por defecto 1 petición cada 60 s. Mínimo absoluto 10 s, solo si está justificado. Máximo **100 peticiones "rápidas" al día**. |
-| **Compresión LZ4 siempre** | En los comentarios de Confluence y en los mensajes del DataChannel. Formatos binarios / base64, no legibles. |
+| **Compresión LZ4 siempre** | En las propiedades de Confluence y en los mensajes del DataChannel. Formatos binarios / base64; comprimir no aporta confidencialidad. |
 | CORS en desarrollo/local | Proxy de Vite (`/wiki`), [localproxy](localproxy/localproxy.ps1) en PowerShell o [fake-atlassian](fake-atlassian/fake-atlassian.ps1). |
 | Pruebas con informe revisable | Vitest (unitarias + cobertura) y Playwright (e2e con 3 clientes) → `reports/`. |
 
@@ -87,7 +87,7 @@ src/
     wire.ts                Frame binario del DataChannel, validación UUID
     protocol.ts            Sobres de Confluence y su validación
     rate-limiter.ts        Cola única + espaciado + presupuesto diario
-    confluence-client.ts   REST API v1 content / comments (vía RateLimiter)
+    confluence-client.ts   REST API v1 content properties (vía RateLimiter)
     pwa-update.ts          Ciclo de vida y detección de actualizaciones de la PWA
     public-ip.ts           IP pública vía candidato STUN srflx
     registry.ts            Anuncios, rotación, sondeo, señalización agrupada
@@ -107,7 +107,7 @@ src/
   test/setup.ts            fake-indexeddb, limpieza entre tests
   types/lz4js.d.ts
 localproxy/localproxy.ps1  Proxy CORS hacia Confluence (o hacia fake-atlassian)
-fake-atlassian/fake-atlassian.ps1  Mock en memoria de la API de comentarios
+fake-atlassian/fake-atlassian.ps1  Mock en memoria de content properties
 test-e2e/                  Playwright: config, helpers, chat.spec.ts
 vitest.config.ts
 reports/                   Informes generados (ignorado por git)
@@ -131,7 +131,7 @@ Valores por defecto (producción). Los tiempos marcados con *t()* se multiplican
 | `startupFastPollMs` *t()* | 2 min | Ventana de unión con sondeo rápido. Debe superar `idlePollMs`. |
 | `fastHoldMs` *t()* | 80 s | Duración máxima del sondeo rápido tras enviar una oferta. |
 | `answerTimeoutMs` *t()* | 150 s | Espera máxima de la respuesta SDP. |
-| `signalBatchDelayMs` *t()* | 1,5 s | Ventana para agrupar señales en un solo comentario. |
+| `signalBatchDelayMs` *t()* | 1,5 s | Ventana para agrupar señales en una propiedad (hasta 20 items y 32 KB). |
 | `signalTtlMs` | 5 min | Antigüedad a partir de la cual se borran las señales propias. |
 | `maxPollBackoffMs` *t()* | 5 min | *Backoff* máximo ante errores. |
 | `maxPeers` | 20 | Tamaño máximo de la malla. |
@@ -150,9 +150,11 @@ Valores por defecto (producción). Los tiempos marcados con *t()* se multiplican
 
 ### `ConfluenceClient` ([confluence-client.ts](src/core/confluence-client.ts))
 - Autenticación `Bearer <token>` (o PAT) y `credentials: 'omit'`.
-- `post(envelope, urgent)` → `POST /rest/api/content` con `{ type: 'comment', container: { id: pageId, type: 'page' }, body: { storage: { value, representation: 'storage' } } }`.
-- `listSince(sinceMs, urgent)` → `GET /rest/api/content/{id}/child/comment?expand=body.storage,version&limit=100`. Recorre `_links.next` y se detiene en el primer comentario anterior a `since`.
-- `remove(id)` → `DELETE /rest/api/content/{id}`.
+- `post(envelope, urgent)` → `POST /rest/api/content/{pageId}/property` con `{ key: "statim.v1.<uuid>", value: { data: "stz1:BASE64_LZ4" } }`. Devuelve la clave, no el ID interno de Confluence.
+- `listSince(sinceMs, urgent)` → `GET /rest/api/content/{pageId}/property?expand=version&limit=100`. Lee valores y versión, recorre todos los `_links.next`, ignora claves ajenas y datos inválidos, filtra por fecha y ordena de más reciente a más antiguo. No presupone orden cronológico del listado.
+- La fecha usa `version.when` o `version.createdAt`; si no existe una fecha válida de servidor, usa `envelope.ts` (depende del reloj del emisor).
+- Cada página del listado consume una petición del limitador. El sondeo se encarece si se acumulan propiedades, incluso ajenas a Statim; la limpieza es importante.
+- `remove(propertyKey)` → `DELETE /rest/api/content/{pageId}/property/{key}`. Solo acepta claves con el prefijo `statim.v1.`.
 - Los errores se lanzan como `ConfluenceError { status, retryAfterMs }`.
 
 ### `Registry` ([registry.ts](src/core/registry.ts))
@@ -164,16 +166,16 @@ Valores por defecto (producción). Los tiempos marcados con *t()* se multiplican
   - estamos dentro de la ventana de unión;
   - hay *holds* activos (`holdFastPolling()`).
 - **Procesado** de lo leído:
-  - Ventana de solapamiento de 30 s para tolerar comentarios que se hacen visibles tarde.
+  - Ventana de solapamiento de 30 s para tolerar propiedades que se hacen visibles tarde.
   - `announce` ajeno → *upsert* del `Peer` (guarda las últimas 3 semillas) y evento `peer`.
-  - `signals` → entrega solo los items con `to == email` **y** `toSession == session`. Desduplica por `commentId` (`processedSignals`).
-- `sendSignal(item)` encola. Tras 1,5 s se publica **un único comentario** con hasta 20 items, de forma urgente.
+  - `signals` → entrega solo los items con `to == email` **y** `toSession == session`. Desduplica por `propertyKey` (`processedProperties`).
+- `sendSignal(item)` encola. Tras 1,5 s se publican propiedades con hasta 20 items, de forma urgente. Si el valor JSON comprimido/base64 supera 32 KB, se divide el lote; una señal individual que no cabe se rechaza sin truncarla ni bloquear las válidas.
 - **Purga** (no urgente): borra los anuncios propios salvo el último y las señales propias con más de 5 min. Ignora los 404.
 - Eventos: `peer`, `signal`, `seed`, `error`.
 
 ### `Mesh` ([mesh.ts](src/core/mesh.ts))
 - **Iniciador = email menor** (orden lexicográfico). El otro extremo espera la oferta.
-- **ICE no-trickle:** se espera a terminar de recoger candidatos (≤ 4 s) y se envía el SDP completo. Así cada conexión cuesta 1 oferta + 1 respuesta, sin comentarios `ice`.
+- **ICE no-trickle:** se espera a terminar de recoger candidatos (≤ 4 s) y se envía el SDP completo. Así cada conexión cuesta 1 oferta + 1 respuesta, sin propiedades `ice`.
 - Al publicar una oferta se activa `holdFastPolling()`. Se libera al recibir la respuesta, al cerrar o tras 80 s.
 - **Fallos:**
   - Sin respuesta en 150 s → se cierra y **no se reintenta** (el par probablemente se fue).
@@ -201,17 +203,22 @@ Crea `ConfluenceClient → Registry → Mesh` y los arranca y para juntos. Gesti
 
 ## 6. Protocolo
 
-### 6.1 Comentarios en Confluence
+### 6.1 Propiedades en Confluence
 
-Cuerpo en formato *storage*:
+Una propiedad inmutable por anuncio o lote, con clave `statim.v1.<uuid>`. No se usa el email como clave compartida: así no se sobrescriben señales pendientes ni hacen falta actualizaciones `PUT` con control de versión.
 
+Valor JSON:
+
+```json
+{ "data": "stz1:BASE64_LZ4_DEL_SOBRE_JSON" }
 ```
-<p>stz1:BASE64( LZ4_FRAME( UTF8( JSON(envelope) ) ) )</p>
-```
 
-- Base64 no contiene caracteres especiales de HTML, así que no hace falta escapar.
-- Al leer: `DOMParser` → `textContent` → prefijo `stz1:` → base64 → LZ4 (≤ 1 MB) → `JSON.parse` → `parseEnvelope()`.
-- `parseEnvelope` **reconstruye** el objeto solo con los campos validados. Cualquiera con acceso a la página puede escribir comentarios, así que no se confía en ellos.
+- `data` contiene `stz1:` seguido de `BASE64(LZ4_FRAME(UTF8(JSON(envelope))))`. No se usa HTML.
+- El valor JSON serializado en UTF-8 no puede superar 32 768 bytes, incluido el envoltorio `{ data }`. Se comprueba antes de publicar y al leer.
+- Al leer: prefijo de clave → estructura y tamaño del valor → prefijo `stz1:` → base64 → LZ4 (≤ 1 MB) → `JSON.parse` → `parseEnvelope()`.
+- `parseEnvelope` **reconstruye** el objeto solo con los campos validados. Las propiedades comparten espacio de nombres y otros usuarios o apps con permisos pueden modificarlas o borrarlas; no se confía en sus datos.
+- Compresión no es cifrado. Se conserva el riesgo aceptado de publicar semillas y datos técnicos accesibles a quienes puedan leer la página.
+- No se leen ni migran comentarios remotos antiguos. Los clientes deben actualizarse juntos para descubrirse mediante este transporte. Las propiedades no se mezclan con el contenido visible de la página.
 
 **Anuncio**
 ```json
@@ -302,7 +309,7 @@ sequenceDiagram
   participant A as Existente (ana, email menor)
   N->>C: POST announce (urgente)
   loop ventana de unión 2 min, cada 10 s
-    N->>C: GET comentarios (urgente)
+    N->>C: GET propiedades (urgente)
   end
   A->>C: GET (cada 60 s, en reposo)
   C-->>A: announce de cid
@@ -346,18 +353,20 @@ Cada cliente reenvía sus propios mensajes de las últimas 10 h en cada envío y
 
 ## 8. Persistencia
 
-### IndexedDB (`statim`, versión 1, Dexie)
+### IndexedDB (`statim`, versión 2, Dexie)
 
 | Tabla | Índices | Contenido |
 |---|---|---|
 | `peers` | `email, lastSeen` | `session`, `ip`, `seeds[≤3]`, `avatarSvg`, `lastSeen` |
 | `messages` | `++id, &msgId, ts, from` | `msgId = "<email>\|<ts>"`, `text`, `ts` de envío del autor |
 | `ownSeeds` | `seedId, createdAt` | Semilla actual (y las anteriores durante el margen de gracia) |
-| `processedSignals` | `commentId, ts` | Desduplicación de señales (se purga a los 70 min) |
-| `ownComments` | `commentId, kind, ts` | Comentarios propios pendientes de purga |
+| `processedProperties` | `propertyKey, ts` | Desduplicación de señales (se purga a los 70 min) |
+| `ownProperties` | `propertyKey, kind, ts` | Propiedades propias pendientes de purga |
 | `settings` | `key` | `baseUrl`, `pageId`, `email`, `token` |
 
-**Si cambias el esquema**, añade `this.version(2).stores({...})` con su migración. No edites la versión 1.
+La versión 2 elimina `processedSignals` y `ownComments`, cuyo seguimiento ya no sirve, y crea `processedProperties` y `ownProperties` vacías. Conserva pares, mensajes, semillas y credenciales. No intenta borrar comentarios remotos con IDs antiguos.
+
+**Si cambias el esquema**, añade una nueva versión con su migración. No edites las versiones anteriores.
 
 ### localStorage
 `statim.fastBudget.<email>`: presupuesto diario de peticiones rápidas.
@@ -411,10 +420,10 @@ Web Components con Shadow DOM, sin framework. Los estilos usan las variables CSS
 | Riesgo | Estado |
 |---|---|
 | **Semilla simétrica publicada en Confluence.** Quien tenga acceso a la página y pueda capturar el tráfico podría descifrar la capa de aplicación. | Aceptado por el propietario. DTLS de WebRTC sigue protegiendo el tránsito. Alternativa preparada para el futuro: ECDH P-256 + claves públicas (sustituir `crypto.ts` y el anuncio). |
-| **Suplantación:** cualquiera con acceso a la página puede publicar un `announce` con otro email. | Pendiente. Mitigación posible: comprobar `version.authorId` del comentario frente al `accountId` del email. |
+| **Suplantación:** quien tenga permisos de escritura puede publicar un `announce` con otro email. | Pendiente. El email declarado en el sobre no autentica al autor de la propiedad. |
 | Token API sin cifrar en IndexedDB | Aceptado en v1. "Salir" lo borra. |
 | Credenciales TURN / Metered | No se almacenan en la app, ni en disco ni en IndexedDB. Se informan opcionalmente en una sección dedicada de la pantalla de acceso y solo se usan en memoria para resolver los servidores TURNS (TLS 443) durante la sesión activa. |
-| Contenido malicioso en comentarios o frames | Validación estricta por campo, límites de tamaño, LZ4 con límite, AES-GCM autenticado, `textContent` en la UI. |
+| Contenido malicioso en propiedades o frames | Validación estricta por campo, límites de tamaño, LZ4 con límite, AES-GCM autenticado para frames, `textContent` en la UI. |
 | Proxy abierto | `localproxy` solo escucha en `localhost`, solo reenvía `/wiki/` al destino fijo, exige `https` (o `http` a localhost), aplica CORS por lista de orígenes y **no imprime el token**. |
 
 ---
@@ -462,9 +471,17 @@ Primera vez con Playwright: `pnpm exec playwright install chromium`.
 | [localproxy](localproxy/localproxy.ps1) | `pwsh localproxy/localproxy.ps1 https://sitio.atlassian.net [-Port 8787] [-AllowedOrigin …] [-PreviewLength 500]` → URL `http://localhost:8787` | Ver en consola cabeceras, parámetros y respuestas; sirve también con la app compilada |
 | [fake-atlassian](fake-atlassian/fake-atlassian.ps1) | `pwsh fake-atlassian/fake-atlassian.ps1 [-Port 8790]`, directo o detrás de localproxy | Varios clientes en local sin Atlassian |
 
+**localproxy y Confluence corporativo:**
+- Si Confluence vive bajo `/confluence`, arrancar con `pwsh localproxy/localproxy.ps1 https://confluence.example.com/confluence -Port 8880` y usar `http://localhost:8880` como URL en Statim. El proxy antepone ese contexto a `/rest/...`; también admite rutas explícitas `/confluence/rest/...` sin duplicar el prefijo.
+- Solo reenvía `Authorization`, `Accept`, `Cookie` y `request-start-time` si llegan. Genera `User-Agent: bruno-runtime/1.0`, `Connection: keep-alive`, `X-Atlassian-Token: no-check` y la marca temporal si falta. No reenvía `Origin`, `Referer`, `Sec-*` ni otras cabeceras del navegador.
+- `Content-Type` se reconstruye sin añadir `charset`; `Host` y `Content-Length` se calculan para el destino y el cuerpo UTF-8. Solo anuncia gzip/deflate, que puede descomprimir; no copia las codificaciones ofrecidas por el navegador.
+- No sigue redirecciones ni mantiene cookies de sesión entre clientes. Reenvía cookies solo si llegan explícitamente y oculta sus valores y los de autorización en los logs. Statim usa `credentials: 'omit'`, por lo que no envía las cookies de la sesión de Bruno. No se desactiva la validación TLS.
+- Prueba local de cabeceras, contexto, compresión y CORS (requiere Node y `pwsh`): `node --test localproxy/localproxy.test.mjs`. No contacta con Confluence real.
+
 **fake-atlassian:**
-- Endpoints: `POST /rest/api/content`, `GET /rest/api/content/{id}/child/comment` (con `expand`, `limit` ≤ 250, `start` y `_links.next`) y `DELETE /rest/api/content/{id}` (solo el autor; si no, 403). Mantiene compatibilidad con `/wiki/api/v2/`.
-- Administración: `GET|DELETE /__admin/comments`.
+- Endpoints: `POST|GET /rest/api/content/{pageId}/property` y `GET|DELETE /rest/api/content/{pageId}/property/{key}`. También admite el prefijo `/wiki`. El listado pagina mediante `limit` ≤ 250, `start` y `_links.next`, y se ordena por clave para no simular un orden cronológico inexistente.
+- Valores de hasta 32 KB; claves únicas por página (duplicadas → 409). El simulador permite borrar a cualquier usuario autenticado, sin inventar una restricción por autor; el cliente solo limpia sus claves locales.
+- Administración: `GET|DELETE /__admin/properties`.
 - Acepta cualquier Bearer token o Basic auth.
 
 **Varios clientes en una máquina:** usa perfiles de navegador distintos (normal, incógnito u otro navegador). Comparten origen, pero no IndexedDB ni `localStorage`. Si agotas el presupuesto diario probando, borra `statim.fastBudget.<email>`.

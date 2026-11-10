@@ -13,7 +13,7 @@ export interface ConfluenceCredentials {
 }
 
 export interface FeedEntry {
-  commentId: string;
+  propertyKey: string;
   createdAt: number;
   envelope: Envelope;
 }
@@ -29,29 +29,38 @@ export class ConfluenceError extends Error {
   }
 }
 
-interface CommentPage {
+interface PropertyPage {
   results: {
-    id: string | number;
-    body?: { storage?: { value?: string } };
+    key: string;
+    value?: unknown;
     version?: { createdAt?: string; when?: string };
   }[];
   _links?: { next?: string };
 }
 
-const MAX_BODY = 512_000;
+export const PROPERTY_PREFIX = 'statim.v1.';
+export const MAX_PROPERTY_BYTES = 32_768;
 const MAX_JSON_BYTES = 1_000_000;
 
-// Comment body: PREFIX + base64(LZ4(JSON)). Base64 has no HTML-special characters.
-function encodeBody(envelope: Envelope): string {
-  return `<p>${PREFIX}${toBase64(compressText(JSON.stringify(envelope)))}</p>`;
+export class PropertySizeError extends Error {
+  constructor() {
+    super('La señal supera el límite de 32 KB de una propiedad de Confluence');
+  }
 }
 
-function decodeBody(value: string | undefined): Envelope | null {
-  if (!value || value.length > MAX_BODY) return null;
-  const text = new DOMParser().parseFromString(value, 'text/html').body.textContent?.trim() ?? '';
-  if (!text.startsWith(PREFIX)) return null;
+export function encodePropertyValue(envelope: Envelope): { data: string } {
+  const value = { data: PREFIX + toBase64(compressText(JSON.stringify(envelope))) };
+  if (new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_PROPERTY_BYTES) throw new PropertySizeError();
+  return value;
+}
+
+function decodeValue(value: unknown): Envelope | null {
+  if (!value || typeof value !== 'object') return null;
   try {
-    return parseEnvelope(JSON.parse(decompressText(fromBase64(text.slice(PREFIX.length)), MAX_JSON_BYTES)));
+    if (new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_PROPERTY_BYTES) return null;
+    const data = (value as Record<string, unknown>).data;
+    if (typeof data !== 'string' || !data.startsWith(PREFIX)) return null;
+    return parseEnvelope(JSON.parse(decompressText(fromBase64(data.slice(PREFIX.length)), MAX_JSON_BYTES)));
   } catch {
     return null;
   }
@@ -94,6 +103,7 @@ export class ConfluenceClient {
     return this.#limiter.schedule(async () => {
       trace('confluence.request', { path, method: init.method ?? 'GET' });
       const headers: Record<string, string> = { Authorization: this.#auth, Accept: 'application/json' };
+      headers['X-Atlassian-Token'] = 'no-check';
       if (init.body) headers['Content-Type'] = 'application/json';
       try {
         const res = await fetch(this.#base + path, { ...init, headers, credentials: 'omit' });
@@ -116,46 +126,41 @@ export class ConfluenceClient {
   }
 
   async post(envelope: Envelope, urgent: Urgency = false): Promise<string> {
-    const value = encodeBody(envelope);
-    const res = await this.#request<{ id: string | number }>(
-      '/rest/api/content',
+    const value = encodePropertyValue(envelope);
+    const key = PROPERTY_PREFIX + crypto.randomUUID();
+    await this.#request(
+      `/rest/api/content/${encodeURIComponent(this.#pageId)}/property`,
       {
         method: 'POST',
         body: JSON.stringify({
-          type: 'comment',
-          container: {
-            id: this.#pageId,
-            type: 'page',
-          },
-          body: {
-            storage: {
-              value,
-              representation: 'storage',
-            },
-          },
+          key,
+          value,
         }),
       },
       urgent,
     );
-    return String(res.id);
+    return key;
   }
 
-  async remove(commentId: string): Promise<void> {
-    await this.#request(`/rest/api/content/${encodeURIComponent(commentId)}`, { method: 'DELETE' }, false);
+  async remove(propertyKey: string): Promise<void> {
+    if (!propertyKey.startsWith(PROPERTY_PREFIX)) throw new Error('Clave de propiedad ajena a Statim');
+    await this.#request(`/rest/api/content/${encodeURIComponent(this.#pageId)}/property/${encodeURIComponent(propertyKey)}`, { method: 'DELETE' }, false);
   }
 
-  /** Newest first, stops at the first comment created before `sinceMs`. */
+  /** Newest first; property listings have no guaranteed chronological order. */
   async listSince(sinceMs: number, urgent: Urgency = false): Promise<FeedEntry[]> {
     const out: FeedEntry[] = [];
-    let path = `/rest/api/content/${encodeURIComponent(this.#pageId)}/child/comment?expand=body.storage,version&limit=100`;
+    let path = `/rest/api/content/${encodeURIComponent(this.#pageId)}/property?expand=version&limit=100`;
 
     while (path) {
-      const page = await this.#request<CommentPage>(path, {}, urgent);
+      const page = await this.#request<PropertyPage>(path, {}, urgent);
       for (const c of page.results) {
-        const createdAt = Date.parse(c.version?.when ?? c.version?.createdAt ?? '');
-        if (!(createdAt >= sinceMs)) return out;
-        const envelope = decodeBody(c.body?.storage?.value);
-        if (envelope) out.push({ commentId: String(c.id), createdAt, envelope });
+        if (typeof c.key !== 'string' || !c.key.startsWith(PROPERTY_PREFIX)) continue;
+        const envelope = decodeValue(c.value);
+        if (!envelope || !Number.isFinite(envelope.ts)) continue;
+        const serverTime = Date.parse(c.version?.when ?? c.version?.createdAt ?? '');
+        const createdAt = Number.isFinite(serverTime) ? serverTime : envelope.ts;
+        if (createdAt >= sinceMs) out.push({ propertyKey: c.key, createdAt, envelope });
       }
       const next = page._links?.next ?? '';
       if (!next) {
@@ -168,10 +173,11 @@ export class ConfluenceClient {
       } else {
         path = next;
       }
-      if (this.#base.endsWith('/wiki') && path.startsWith('/wiki/')) {
-        path = path.slice(5);
+      const basePath = new URL(this.#base || '/', location.href).pathname.replace(/\/+$/, '');
+      if (basePath && path.startsWith(basePath + '/')) {
+        path = path.slice(basePath.length);
       }
     }
-    return out;
+    return out.sort((first, second) => second.createdAt - first.createdAt);
   }
 }

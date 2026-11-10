@@ -2,11 +2,11 @@ import { expect, test } from '@playwright/test';
 import { FAKE_URL, PAGE_ID, PROXY_URL } from './env.ts';
 import { connectedText, join, message, openClient, send, snapshot, status, type Client } from './helpers.ts';
 
-interface AdminComment {
-  id: string;
+interface AdminProperty {
+  key: string;
   pageId: string;
   version: { authorId: string };
-  body: { storage: { value: string } };
+  value: { data: string };
 }
 
 test.describe.serial('Sala con 3 clientes (localproxy + fake-atlassian)', () => {
@@ -14,7 +14,7 @@ test.describe.serial('Sala con 3 clientes (localproxy + fake-atlassian)', () => 
   const [ana, bob, cid] = [0, 1, 2].map((i) => () => clients[i]);
 
   test.beforeAll(async ({ browser, request }) => {
-    await request.delete(`${FAKE_URL}/__admin/comments`);
+    await request.delete(`${FAKE_URL}/__admin/properties`);
     for (const name of ['Ana', 'Bob', 'Cid']) clients.push(await openClient(browser, name));
   });
 
@@ -68,16 +68,20 @@ test.describe.serial('Sala con 3 clientes (localproxy + fake-atlassian)', () => 
   });
 
   test('Confluence solo transporta señalización comprimida, nunca los mensajes', async ({ request }) => {
-    const res = await request.get(`${FAKE_URL}/__admin/comments`);
-    const { results } = (await res.json()) as { results: AdminComment[] };
+    const res = await request.get(`${FAKE_URL}/__admin/properties`);
+    const { results } = (await res.json()) as { results: AdminProperty[] };
 
-    await test.step('hay comentarios de los 3 clientes en la página', async () => {
+    await test.step('hay propiedades de los 3 clientes en la página', async () => {
       const authors = new Set(results.filter((c) => c.pageId === PAGE_ID).map((c) => c.version.authorId));
       expect([...authors].sort()).toEqual(['ana@e2e.test', 'bob@e2e.test', 'cid@e2e.test']);
     });
 
-    await test.step('todos los cuerpos son stz1: + base64(LZ4)', async () => {
-      for (const c of results) expect(c.body.storage.value).toMatch(/^<p>stz1:[A-Za-z0-9+/=]+<\/p>$/);
+    await test.step('los valores son stz1: + base64(LZ4) y no superan 32 KB', async () => {
+      for (const property of results) {
+        expect(property.key).toMatch(/^statim\.v1\./);
+        expect(property.value.data).toMatch(/^stz1:[A-Za-z0-9+/=]+$/);
+        expect(Buffer.byteLength(JSON.stringify(property.value), 'utf8')).toBeLessThanOrEqual(32768);
+      }
     });
 
     await test.step('ningún texto del chat aparece en Confluence', async () => {

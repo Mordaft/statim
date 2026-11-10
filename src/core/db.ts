@@ -30,12 +30,12 @@ export interface OwnSeed {
 }
 
 export interface ProcessedSignal {
-  commentId: string;
+  propertyKey: string;
   ts: number;
 }
 
-export interface OwnComment {
-  commentId: string;
+export interface OwnProperty {
+  propertyKey: string;
   kind: 'announce' | 'signal';
   ts: number;
 }
@@ -49,8 +49,8 @@ export class StatimDB extends Dexie {
   peers!: EntityTable<Peer, 'email'>;
   messages!: EntityTable<Message, 'id'>;
   ownSeeds!: EntityTable<OwnSeed, 'seedId'>;
-  processedSignals!: EntityTable<ProcessedSignal, 'commentId'>;
-  ownComments!: EntityTable<OwnComment, 'commentId'>;
+  processedProperties!: EntityTable<ProcessedSignal, 'propertyKey'>;
+  ownProperties!: EntityTable<OwnProperty, 'propertyKey'>;
   settings!: EntityTable<Setting, 'key'>;
 
   constructor() {
@@ -62,6 +62,12 @@ export class StatimDB extends Dexie {
       processedSignals: 'commentId, ts',
       ownComments: 'commentId, kind, ts',
       settings: 'key',
+    });
+    this.version(2).stores({
+      processedSignals: null,
+      ownComments: null,
+      processedProperties: 'propertyKey, ts',
+      ownProperties: 'propertyKey, kind, ts',
     });
   }
 }

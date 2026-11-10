@@ -45,7 +45,7 @@ export default defineConfig({
     {
       command: `${psCmd} -File fake-atlassian/fake-atlassian.ps1 -Port ${FAKE_PORT}`,
       cwd: '..',
-      url: `${FAKE_URL}/__admin/comments`,
+      url: `${FAKE_URL}/__admin/properties`,
       reuseExistingServer: false,
       timeout: 30_000,
     },

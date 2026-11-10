@@ -1,0 +1,29 @@
+info:
+  name: Inserta comentario a pagina STUM
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: https://confluence.cloud.lacaixa.es/confluence/rest/api/content/5473209014/property
+  headers:
+    - name: X-Atlassian-Token
+      value: no-check
+    - name: Accept
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "key": "statim.v1.dc0cce9a-f261-498a-b484-8f8831fd3fab",
+        "value": {
+          "data":"stz1:BCJNGEBw3+8AAADxaHsidCI6ImFubm91bmNlIiwidiI6MSwiZW1haWwiOiJ1MDE5NTYyOUBsYWNhaXhhLmVzIiwic2Vzc2lvbiI6IjM5ZGY3ZDNjLTI1NmMtNGJkYi1hNThjLTc4ZGE2MWZlOWRiNyIsImlwIjoiNzkuMTE2LjQ3LjY5RQDzHGVkSWQiOiI4OTZmNjhmYi0zOTQ2LTRjNmEtOWExZS0xNDVlYmVhNDkxYjgwAAAuAPAxdDFkNHVqUnMxV3ZJSVQ2cjU1aEdxSW5YWVIzczhEeFFCL0FaK0hXb3JZPSIsInRzIjoxNzk0MzA2OTM4ODY5fQAAAAA="
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -75,7 +75,7 @@ Cuando el sistema pausa Statim, cuenta como si te hubieras desconectado. Al volv
 ## Privacidad y seguridad
 
 - Los mensajes van **directos entre dispositivos**, cifrados en el trayecto. **No pasan por Confluence** ni por ningún otro servidor.
-- En Confluence solo se publican datos técnicos para encontrarse: tu email, datos de conexión y una clave de cifrado que cambia cada hora. Aparecen como comentarios ilegibles en la página del equipo.
+- En Confluence solo se publican datos técnicos para encontrarse: tu email, datos de conexión y una clave de cifrado que cambia cada hora. Se guardan comprimidos en propiedades de la página del equipo, no como comentarios visibles. La compresión no es cifrado.
 - **Quien tenga acceso a esa página de Confluence podría leer esas claves.** No uses Statim para información confidencial.
 - Tu **API token se guarda sin cifrar en el dispositivo**. Usa **Salir** en equipos compartidos.
 
