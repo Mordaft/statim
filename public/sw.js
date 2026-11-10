@@ -1,5 +1,5 @@
 const CACHE = 'statim-v1';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg'];
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg', './icons/statim-logo-emblem.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
